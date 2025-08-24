@@ -11,6 +11,8 @@ import * as Yup from "yup";
 import { FormSelect } from "../UI/FormInput";
 import { DateTime } from "luxon";
 import { start } from "repl";
+import DownloadOrderListView from "./DownloadOrderListView";
+// PDF generation handled locally in this file
 
 export default function OrderListView() {
   const [page, setPage] = useState(1);
@@ -114,6 +116,42 @@ export default function OrderListView() {
   const [retrievedentryDateTime, setRetrievedentryDateTime] = useState<string | null>(null);
   const [retrievedexitDateTime, setRetrievedexitDateTime] = useState<string | null>(null);
   const [isMaxRow,setisMaxRow] = useState<boolean>(false);
+  // Selection state for table rows
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  const toggleSelectAll = () => {
+    const rows: any[] = Array.isArray(ordersData?.data) ? ordersData!.data : [];
+    if (!rows.length) return;
+    if (selectedIds.length === rows.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(rows.map((o: any) => String(o.id)));
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  useEffect(() => {
+    const rows: any[] = Array.isArray(ordersData?.data) ? ordersData!.data : [];
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate =
+        selectedIds.length > 0 && selectedIds.length < rows.length;
+    }
+  }, [selectedIds, ordersData]);
+
+  const selectedOrder = React.useMemo(() => {
+    const rows: any[] = Array.isArray(ordersData?.data) ? ordersData!.data : [];
+    if (!rows.length || selectedIds.length === 0) return null;
+    const firstId = selectedIds[0];
+    return rows.find((o: any) => String(o.id) === String(firstId)) || null;
+  }, [ordersData, selectedIds]);
+  console.log("[OrderListView] selectedIds:", selectedIds);
+  console.log("[OrderListView] selectedOrder:", selectedOrder);
 
 
   console.log("current enablepallete: ", enablepallete);
@@ -318,6 +356,9 @@ export default function OrderListView() {
       refetchProductionData();
     },
   });
+
+  // Handle PDF download (calls shared PDF utility)
+  // PDF download now handled by DownloadOrderListView component
 
   const { data: fetchedProductionData, refetch: refetchProductionData } =
     useQuery({
@@ -986,6 +1027,15 @@ export default function OrderListView() {
                 Refresh
               </button>
             </div>
+            <div className="flex flex-col">
+              <label className="text-black invisible">End Date: </label>
+              <DownloadOrderListView
+                className="my-auto"
+                label="Download"
+                ofId={selectedOrder?.order_form_id ?? selectedOrder?.order_fabrication_control}
+                customerName={selectedOrder?.tbl_customer?.company_name}
+              />
+            </div>
 
             {/* <button
     onClick={() => {
@@ -1002,6 +1052,18 @@ export default function OrderListView() {
         <table className="table text-center">
           <thead>
             <tr>
+              <th>
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  className="checkbox checkbox-primary"
+                  checked={
+                    (ordersData?.data?.length || 0) > 0 &&
+                    selectedIds.length === (ordersData?.data?.length || 0)
+                  }
+                  onChange={toggleSelectAll}
+                />
+              </th>
               <th>OF ID</th>
               {/* <th>Product Name</th> */}
               <th>Customer Name</th>
@@ -1016,19 +1078,27 @@ export default function OrderListView() {
           <tbody>
             {isLoading || isFetching ? (
               <tr>
-                <td colSpan={7}>
+                <td colSpan={8}>
                   <span className="loading loading-dots loading-md"></span>
                 </td>
               </tr>
             ) : isError ? (
               <tr>
-                <td className="text-error font-bold" colSpan={7}>
+                <td className="text-error font-bold" colSpan={8}>
                   Something went wrong while fetching orders list.
                 </td>
               </tr>
             ) : ordersData?.data?.length > 0 ? (
               ordersData.data.map((order: any, index: number) => (
                 <tr key={index}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-primary"
+                      checked={selectedIds.includes(String(order.id))}
+                      onChange={() => toggleSelectOne(String(order.id))}
+                    />
+                  </td>
                   <td
                     className="text-xs hover:text-orange-500 hover:cursor-pointer"
                     onClick={() => {
@@ -1081,7 +1151,7 @@ export default function OrderListView() {
               ))
             ) : (
               <tr>
-                <td className="font-bold" colSpan={7}>
+                <td className="font-bold" colSpan={8}>
                   NO DATA FOUND.
                 </td>
               </tr>
@@ -1089,7 +1159,7 @@ export default function OrderListView() {
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={7}>
+              <td colSpan={8}>
                 <span className="text-xs">
                   {ordersData?.total_count
                     ? `${(page - 1) * limit + 1}-${Math.min(
