@@ -1032,8 +1032,7 @@ export default function OrderListView() {
               <DownloadOrderListView
                 className="my-auto"
                 label="Download"
-                ofId={selectedOrder?.order_form_id ?? selectedOrder?.order_fabrication_control}
-                customerName={selectedOrder?.tbl_customer?.company_name}
+                ofIds={selectedIds}
               />
             </div>
 
