@@ -22,8 +22,6 @@ export default function OrderListView() {
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  // const [order, setOrder] = useState("Order");
-  // const [sort_by, setSort_by] = useState("Sort By");
   const {
     data: ordersData,
     refetch: refetchOrdersData,
@@ -87,6 +85,8 @@ export default function OrderListView() {
     retry: 1,
   });
 
+
+
   const navigator = useRouter();
   const supabase = createClient();
   const [useremail, setUseremail] = useState<string | null>(null);
@@ -116,46 +116,76 @@ export default function OrderListView() {
   const [retrievedentryDateTime, setRetrievedentryDateTime] = useState<string | null>(null);
   const [retrievedexitDateTime, setRetrievedexitDateTime] = useState<string | null>(null);
   const [isMaxRow,setisMaxRow] = useState<boolean>(false);
+  
   // Selection state for table rows
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const selectAllRef = useRef<HTMLInputElement>(null);
 
-  const toggleSelectAll = () => {
+  // Function to toggle "select all" rows
+  const toggleSelectAll = () => {     
+    // Get rows safely (make sure it's an array)
     const rows: any[] = Array.isArray(ordersData?.data) ? ordersData!.data : [];
-    if (!rows.length) return;
+    if (!rows.length) return; // do nothing if no rows exist
+
+    // If ALL rows are already selected → unselect all
     if (selectedIds.length === rows.length) {
       setSelectedIds([]);
     } else {
+      // Otherwise → select all rows by mapping their IDs into an array
       setSelectedIds(rows.map((o: any) => String(o.id)));
     }
   };
 
+  // Function to toggle a single row by ID
   const toggleSelectOne = (id: string) => {
     setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      // If this row ID is already in the selection → remove it
+      prev.includes(id) ? prev.filter((x) => x !== id) 
+       // Otherwise → add it to the selection
+      : [...prev, id]
     );
   };
 
+  // Effect to update "Select All" checkbox state
   useEffect(() => {
+    // Safely get rows again
     const rows: any[] = Array.isArray(ordersData?.data) ? ordersData!.data : [];
+
+    // If the Select All checkbox exists
     if (selectAllRef.current) {
+      // Set indeterminate state (dash mark instead of check) if:
+      // - At least 1 row is selected, AND
+      // - Not all rows are selected
       selectAllRef.current.indeterminate =
         selectedIds.length > 0 && selectedIds.length < rows.length;
     }
-  }, [selectedIds, ordersData]);
+  }, [selectedIds, ordersData]); // run whenever selection or rows change
 
-  const selectedOrder = React.useMemo(() => {
+  const selectedOrders = React.useMemo(() => {
     const rows: any[] = Array.isArray(ordersData?.data) ? ordersData!.data : [];
-    if (!rows.length || selectedIds.length === 0) return null;
-    const firstId = selectedIds[0];
-    return rows.find((o: any) => String(o.id) === String(firstId)) || null;
+
+    // If no rows or no selection → return empty array
+    if (!rows.length || selectedIds.length === 0) return [];
+
+    const result: any[] = [];
+
+    // Loop through each row
+    for (let i = 0; i < rows.length; i++) {
+      const order = rows[i];
+
+      // If the current order’s ID is in selectedIds, add it to result
+      if (selectedIds.includes(String(order.id))) {
+        result.push(order);
+      }
+    }
+
+      return result; // array of all selected orders
   }, [ordersData, selectedIds]);
+
   console.log("[OrderListView] selectedIds:", selectedIds);
-  console.log("[OrderListView] selectedOrder:", selectedOrder);
+  console.log("[OrderListView] selectedOrders:", selectedOrders);
+  console.log("order data: ", ordersData)
 
-
-  console.log("current enablepallete: ", enablepallete);
-  console.log("rows lenght",tractnumbercontrollenght);
 
   useEffect(() => {
     const fetchUserEmail = async () => {
@@ -204,7 +234,6 @@ export default function OrderListView() {
           : "Unknown",
       };
     }) || [];
-  console.log("Orders With Customer Names:", ordersWithCustomerNames);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAssignModalOpen, setAssignModal] = useState(false);
@@ -285,18 +314,6 @@ export default function OrderListView() {
     ],
   });
 
-  // useEffect(() => {
-  //   setInitialValuesMeasurement((prev) => ({
-  //     ...prev,
-  //     rowsmeasurement: prev.rowsmeasurement.map((row) => ({
-  //       ...row,
-  //       pallete_count: lastpalleteCount,
-  //     })),
-  //   }));
-  // }, [lastpalleteCount]);
-
-  // console.log("controlnumber:  ", initialValuesMeasurement.rowsmeasurement[0].number_of_control);
-  //   console.log("controlnumber:  ", initialValuesMeasurement.rowsmeasurement[0].number_of_control);
   const initialValuesAssign = {
     user_id: "",
   };
@@ -1032,7 +1049,7 @@ export default function OrderListView() {
               <DownloadOrderListView
                 className="my-auto"
                 label="Download"
-                ofIds={selectedIds}
+                selectedOrders={selectedOrders}
               />
             </div>
 
