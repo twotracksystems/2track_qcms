@@ -12,7 +12,6 @@ import { FormSelect } from "../UI/FormInput";
 import { DateTime } from "luxon";
 import { start } from "repl";
 import DownloadOrderListView from "./DownloadOrderListView";
-// PDF generation handled locally in this file
 
 export default function OrderListView() {
   const [page, setPage] = useState(1);
@@ -36,8 +35,6 @@ export default function OrderListView() {
       limit,
       startDate,
       endDate,
-      // sort_by,
-      // order,
     ],
     queryFn: async () => {
       if (startDate && endDate) {
@@ -181,11 +178,6 @@ export default function OrderListView() {
 
       return result; // array of all selected orders
   }, [ordersData, selectedIds]);
-
-  console.log("[OrderListView] selectedIds:", selectedIds);
-  console.log("[OrderListView] selectedOrders:", selectedOrders);
-  console.log("order data: ", ordersData)
-
 
   useEffect(() => {
     const fetchUserEmail = async () => {
