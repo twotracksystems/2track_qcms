@@ -4,6 +4,19 @@ import toast from "react-hot-toast";
 import { createClient } from "@/utils/supabase/client";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { create } from "domain";
+import { useState } from "react";
+
+import { useMutation, useQuery } from "@tanstack/react-query";
+
+// necessary packages for generating PDFs
+import { jsPDF } from "jspdf";
+import { autoTable } from "jspdf-autotable";
+import {
+  drawHorizontalLine,
+  drawLeftHeader,
+  drawMainHeader,
+  drawRightHeader,
+} from "./PDFBuilder";
 
 // necessary packages for exporting zip files
 import JSZip from "jszip";
@@ -24,8 +37,76 @@ export default function DownloadOrderListView({
   fileName = "quality_control_report.pdf",
   onPDFGenerated,
   mode = "preview",
-  selectedOrders, // Unique IDs of selected ordersz
+  selectedOrders, // Array of selected order objects from the rows
 }: DownloadOrderListViewProps) {
+    const GetCustomerSpecificationsData = async (nominalArticleId:number, minArticleId:number, maxArticleId:number ) => {
+      const customerSpecificationsDataAggregated = [];
+
+      const responseNominal = await fetch(
+        `/api/v1/getonearticlenominal?id=${encodeURIComponent(
+          nominalArticleId
+        )}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "*/*",
+            "User-Agent": "Thunder Client (https://www.thunderclient.com)",
+          },
+        }
+      );
+
+      const nominalResult = await responseNominal.json();
+
+      if (responseNominal.ok) {
+        console.log("Fetched Article Nominal:", nominalResult);
+        customerSpecificationsDataAggregated.push(nominalResult);
+      } else {
+        customerSpecificationsDataAggregated.push({});
+      }
+
+      const responseMin = await fetch(
+        `/api/v1/getonearticlemin?id=${encodeURIComponent(minArticleId)}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "*/*",
+            "User-Agent": "Thunder Client (https://www.thunderclient.com)",
+          },
+        }
+      );
+
+      const minResult = await responseMin.json();
+
+      if (responseMin.ok) {
+        console.log("Fetched Article Min:", minResult);
+        customerSpecificationsDataAggregated.push(minResult);
+      } else {
+        customerSpecificationsDataAggregated.push({});
+      }
+
+      const responseMax = await fetch(
+        `/api/v1/getonearticlemax?id=${encodeURIComponent(maxArticleId)}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "*/*",
+            "User-Agent": "Thunder Client (https://www.thunderclient.com)",
+          },
+        }
+      );
+
+      const maxResult = await responseMax.json();
+
+      if (responseMax.ok) {
+        console.log("Fetched Article Max:", maxResult);
+        customerSpecificationsDataAggregated.push(maxResult);
+      } else {
+        customerSpecificationsDataAggregated.push({});
+      }
+
+      return customerSpecificationsDataAggregated;
+    };
+
   const handleClick = async () => {
     try {
       console.log("Selected Orders: ", selectedOrders);
@@ -36,10 +117,46 @@ export default function DownloadOrderListView({
           // map over selected orders
           const get = (v: any, fallback = "***") =>
             v === null || v === undefined || v === "" ? fallback : String(v);
+          const client = get(undefined); // populated from parent when a row is selected
           const customer = get(undefined); // populated from parent when a row is selected
           const orderNo = get(order.order_fabrication_control);
-          const deliveryDate = get(undefined);
-          const productionDate = get(undefined);
+
+          // format delivery date
+          const deliveryDate = get(order.exit_date_time);
+          const deliveryDateFormatted = new Date(
+            deliveryDate
+          ).toLocaleDateString("en-GB");
+          const deliveryDateTime = new Date(deliveryDate).toLocaleTimeString(
+            "en-GB",
+            { hour: "2-digit", minute: "2-digit", second: "2-digit" }
+          );
+
+          // format production date
+          const productionDate = get(order.created_at);
+          const productionDateFormatted = new Date(
+            productionDate
+          ).toLocaleDateString("en-GB");
+          const productionDateTime = new Date(
+            productionDate
+          ).toLocaleTimeString("en-GB", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          });
+
+          console.log("selected orders: ", order);
+
+          
+          const customerSpecificationsData = await GetCustomerSpecificationsData(
+            get(order.tbl_article?.article_nominal) as unknown as number,
+            get(order.tbl_article?.article_min) as unknown as number,
+            get(order.tbl_article?.article_max) as unknown as number  
+          )
+
+          console.log(
+            "Customer Specifications Data:",
+            customerSpecificationsData
+          );
 
           const { default: jsPDF } = await import("jspdf");
           const doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -62,47 +179,16 @@ export default function DownloadOrderListView({
           } catch {}
 
           // Right header text
-          doc.setFont("times new roman", "bolditalic");
-          doc.setFontSize(15);
-          doc.text("AQ 30", pageWidth - margin, margin + 30, {
-            align: "right",
-          });
+          drawRightHeader(doc, "AQ 30", margin);
 
-          doc.setFont("times new roman", "italic");
-          doc.setFontSize(15);
-          doc.text("Indices: 0", pageWidth - margin, margin + 50, {
-            align: "right",
-          });
+          // Main header text
+          drawMainHeader(doc, "Corex AG", customer, margin);
 
-          // Subtitle centered
-          doc.setFont("times new roman", "italic");
-          doc.setFontSize(12);
-          doc.text(
-            "Prufkontrol Bericht / Rapport de controle qualite / Quality control report",
-            pageWidth / 2,
-            margin + 85,
-            { align: "center" }
-          );
-          // Header for client (placeholder for now)
-          doc.setFont("times new roman", "italic");
-          doc.setFontSize(10);
-          doc.text("Kunde:", margin, margin + 110, { align: "left" });
-          doc.text(`Client: ${customer}`, margin, margin + 125, {
-            align: "left",
-          });
-          doc.text("Customer:", margin, margin + 140, { align: "left" });
-
-          // Horizontal line separator with dark blue color
-          doc.setDrawColor(30, 58, 138); // Dark blue color
-          doc.setLineWidth(2);
-          doc.line(margin, margin + 155, pageWidth - margin, margin + 155);
+          // Horizontal line below headers
+          drawHorizontalLine(doc, margin, 155);
 
           //Header title: Order
-          doc.setFont("times new roman", "bolditalic");
-          doc.setFontSize(12);
-          doc.text("Bestellung / Commande / Order", margin, margin + 175, {
-            align: "left",
-          });
+          drawLeftHeader(doc, "Bestellung / Commande / Order", margin, 175);
 
           // Table with 3 columns and 3 rows (last column merged)
           const tableY = margin + 185;
@@ -140,7 +226,8 @@ export default function DownloadOrderListView({
             margin + 8,
             tableY + 41
           );
-          doc.text(deliveryDate, margin + col1Width + 15, tableY + 41);
+          doc.text(deliveryDateFormatted, margin + col1Width + 15, tableY + 41);
+          doc.text(deliveryDateTime, margin + col1Width + 15, tableY + 53);
 
           // Row 3
           doc.text(
@@ -148,7 +235,12 @@ export default function DownloadOrderListView({
             margin + 8,
             tableY + 67
           );
-          doc.text(productionDate, margin + col1Width + 15, tableY + 67);
+          doc.text(
+            productionDateFormatted,
+            margin + col1Width + 15,
+            tableY + 67
+          );
+          doc.text(productionDateTime, margin + col1Width + 15, tableY + 79);
 
           // Merged cell in last column (spans all 3 rows)
           doc.setFont("times new roman", "bold");
@@ -160,19 +252,15 @@ export default function DownloadOrderListView({
             { align: "center" }
           );
 
-          // Horizontal line separator with dark blue color
-          doc.setDrawColor(30, 58, 138); // Dark blue color
-          doc.setLineWidth(2);
-          doc.line(margin, margin + 280, pageWidth - margin, margin + 280);
+          // Horizontal line below Order table
+          drawHorizontalLine(doc, margin, 280);
 
-          //Header title: Order
-          doc.setFont("times new roman", "bolditalic");
-          doc.setFontSize(12);
-          doc.text(
+          //Header title: Customer specifications
+          drawLeftHeader(
+            doc,
             "Kudenspezifikationen / Spécifications du client / Customer specifications",
             margin,
-            margin + 300,
-            { align: "left" }
+            300
           );
 
           // Customer specifications table: 6 rows x 4 columns
@@ -185,18 +273,10 @@ export default function DownloadOrderListView({
           const rowHeight = 26;
           const rows = 6;
 
-          // Draw outer border
-          // doc.setDrawColor(30, 58, 138);
-          // doc.setLineWidth(1);
-          // doc.rect(margin, specTableY, tableWidth, rowHeight * rows);
-
           // Vertical lines for columns (4 columns total)
           const colX2 = margin + specCol1Width;
           const colX3 = colX2 + specColOtherWidth;
           const colX4 = colX3 + specColOtherWidth;
-          // doc.line(colX2, specTableY, colX2, specTableY + rowHeight * rows);
-          // doc.line(colX3, specTableY, colX3, specTableY + rowHeight * rows);
-          // doc.line(colX4, specTableY, colX4, specTableY + rowHeight * rows);
 
           // Horizontal lines for rows
           for (let i = 1; i < rows; i++) {
