@@ -8,9 +8,9 @@ import { useState } from "react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 
-// packages to generate the different charts
-import { Doughnut } from "react-chartjs-2";
-
+// necessary packages for generating PDFs
+import { jsPDF } from "jspdf";
+import { autoTable } from "jspdf-autotable";
 import {
   DrawFooter,
   DrawGraph,
@@ -646,6 +646,85 @@ export default function DownloadOrderListView({
             orderNo,
             current_date
           );
+
+          // Page 02 start
+          doc.addPage();
+
+          // Try to load logo from public path and place it on the PDF
+          try {
+            const logo = new Image();
+            logo.src = "/Img/corexlogo.png";
+            await logo.decode();
+            doc.addImage(
+              logo as HTMLImageElement,
+              "PNG",
+              margin,
+              margin,
+              200,
+              70
+            );
+          } catch {}
+
+          // Right header text
+          drawRightHeader(doc, "AQ 30", 2, margin);
+
+          // Main header text
+          drawMainHeader(doc, company_name, margin, 2);
+
+          // Horizontal line below headers
+          DrawHorizontalLine(doc, margin, 130);
+
+          // Draw the first graph
+
+          DrawGraph(doc, nominal_data["length"], margin);
+
+          // Horizontal line for footer
+          DrawHorizontalLine(doc, margin, 720);
+
+          // Draw Footer
+          DrawFooter(
+            doc,
+            margin, // used to map x position
+            orderNo,
+            current_date
+          );
+          // Page 03 start
+          doc.addPage();
+
+          // Try to load logo from public path and place it on the PDF
+          try {
+            const logo = new Image();
+            logo.src = "/Img/corexlogo.png";
+            await logo.decode();
+            doc.addImage(
+              logo as HTMLImageElement,
+              "PNG",
+              margin,
+              margin,
+              200,
+              70
+            );
+          } catch {}
+
+          // Right header text
+          drawRightHeader(doc, "AQ 30", 3, margin);
+
+          // Main header text
+          drawMainHeader(doc, company_name, margin, 3);
+
+          // Horizontal line below headers
+          DrawHorizontalLine(doc, margin, 130);
+
+          // Horizontal line for footer
+          DrawHorizontalLine(doc, margin, 720);
+
+          // Draw Footer
+          DrawFooter(
+            doc,
+            margin, // used to map x position
+            orderNo,
+            current_date
+          );
           const pdfFileName = `quality_control_report_order_${orderNo}`;
 
           pdfs.push({ doc, filename: pdfFileName }); // collect blobs for zip
@@ -655,12 +734,9 @@ export default function DownloadOrderListView({
       if (pdfs.length > 1) {
         // more than 1 file to download - create zip
         const zip = new JSZip();
-        mode = "download";
-        console.log("pdfs for zipping: ", pdfs);
-
-        pdfs.forEach(({ doc, filename }) => {
-          const pdfBlob = doc.output("blob");
-          zip.file(`${filename}.pdf`, pdfBlob);
+        pdfs.forEach((pdfDoc, index) => {
+          const pdfBlob = pdfDoc.output("blob");
+          zip.file(`quality_control_report_${index + 1}.pdf`, pdfBlob);
         });
 
         const zipBlob = await zip.generateAsync({ type: "blob" });
@@ -690,24 +766,6 @@ export default function DownloadOrderListView({
         } else if (mode === "download") {
           doc.save(fileName);
           toast.success("PDF downloaded");
-          setIsDisabled(false);
-          setButtonLabel("Download");
-        } else {
-          onPDFGenerated?.(pdfBlob);
-          const url = URL.createObjectURL(pdfBlob);
-          console.log("[DownloadOrderListView] Preview Blob URL:", url);
-          (window as any).__lastPdfUrl = url; // Access from DevTools: window.__lastPdfUrl
-          window.open(url);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = fileName || pdfs[0]["filename"]; // Use the pdf's fileName
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          toast.success("PDF generated for preview");
-          setIsDisabled(false);
-          setButtonLabel("Download");
-          return;
         }
       }
     } catch (err) {
