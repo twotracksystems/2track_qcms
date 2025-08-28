@@ -8,12 +8,14 @@ import { useState } from "react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 
-// necessary packages for generating PDFs
-import { jsPDF } from "jspdf";
-import { autoTable } from "jspdf-autotable";
+// packages to generate the different charts
+import { Doughnut } from 'react-chartjs-2';
+
 import {
-  drawHorizontalLine,
-  drawLeftHeader,
+  DrawFooter,
+  DrawGraph,
+  DrawHorizontalLine,
+  DrawLeftHeader,
   drawMainHeader,
   drawRightHeader,
 } from "./PDFBuilder";
@@ -21,6 +23,7 @@ import {
 // necessary packages for exporting zip files
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
+import { Duration } from "luxon";
 
 interface DownloadOrderListViewProps {
   label?: string;
@@ -34,94 +37,128 @@ interface DownloadOrderListViewProps {
 export default function DownloadOrderListView({
   label = "Download",
   className = "",
-  fileName = "quality_control_report.pdf",
+  fileName = "quality_control_report.doc",
   onPDFGenerated,
   mode = "preview",
   selectedOrders, // Array of selected order objects from the rows
 }: DownloadOrderListViewProps) {
-    const GetCustomerSpecificationsData = async (nominalArticleId:number, minArticleId:number, maxArticleId:number ) => {
-      const customerSpecificationsDataAggregated = [];
+  const baseStyle = { backgroundColor: "#1d4ed8", color: "#fff" };
+  const disabledStyle = { opacity: 0.5, cursor: "not-allowed" };
 
-      const responseNominal = await fetch(
-        `/api/v1/getonearticlenominal?id=${encodeURIComponent(
-          nominalArticleId
-        )}`,
-        {
-          method: "GET",
-          headers: {
-            Accept: "*/*",
-            "User-Agent": "Thunder Client (https://www.thunderclient.com)",
-          },
-        }
-      );
+  const [isDisabled, setIsDisabled] = useState(false);
+  const [buttonLabel, setButtonLabel] = useState("Download");
 
-      const nominalResult = await responseNominal.json();
+  // function to get control results
+  const GetControlResults = async () => {};
 
-      if (responseNominal.ok) {
-        console.log("Fetched Article Nominal:", nominalResult);
-        customerSpecificationsDataAggregated.push(nominalResult);
-      } else {
-        customerSpecificationsDataAggregated.push({});
+  // function to get customer specifications data
+  const GetCustomerSpecificationsData = async (
+    nominalArticleId: number,
+    minArticleId: number,
+    maxArticleId: number
+  ) => {
+    const customerSpecificationsDataAggregated = [];
+
+    const responseNominal = await fetch(
+      // index [0] = nominal, index [1] = Max, index [2] = Min
+      `/api/v1/getonearticlenominal?id=${encodeURIComponent(nominalArticleId)}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "*/*",
+          "User-Agent": "Thunder Client (https://www.thunderclient.com)",
+        },
       }
+    );
 
-      const responseMin = await fetch(
-        `/api/v1/getonearticlemin?id=${encodeURIComponent(minArticleId)}`,
-        {
-          method: "GET",
-          headers: {
-            Accept: "*/*",
-            "User-Agent": "Thunder Client (https://www.thunderclient.com)",
-          },
-        }
-      );
+    const nominalResult = await responseNominal.json();
 
-      const minResult = await responseMin.json();
+    if (responseNominal.ok) {
+      customerSpecificationsDataAggregated.push(nominalResult[0]);
+    } else {
+      customerSpecificationsDataAggregated.push({});
+    }
 
-      if (responseMin.ok) {
-        console.log("Fetched Article Min:", minResult);
-        customerSpecificationsDataAggregated.push(minResult);
-      } else {
-        customerSpecificationsDataAggregated.push({});
+    const responseMin = await fetch(
+      `/api/v1/getonearticlemin?id=${encodeURIComponent(minArticleId)}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "*/*",
+          "User-Agent": "Thunder Client (https://www.thunderclient.com)",
+        },
       }
+    );
 
-      const responseMax = await fetch(
-        `/api/v1/getonearticlemax?id=${encodeURIComponent(maxArticleId)}`,
-        {
-          method: "GET",
-          headers: {
-            Accept: "*/*",
-            "User-Agent": "Thunder Client (https://www.thunderclient.com)",
-          },
-        }
-      );
+    const minResult = await responseMin.json();
 
-      const maxResult = await responseMax.json();
+    if (responseMin.ok) {
+      customerSpecificationsDataAggregated.push(minResult[0]);
+    } else {
+      customerSpecificationsDataAggregated.push({});
+    }
 
-      if (responseMax.ok) {
-        console.log("Fetched Article Max:", maxResult);
-        customerSpecificationsDataAggregated.push(maxResult);
-      } else {
-        customerSpecificationsDataAggregated.push({});
+    const responseMax = await fetch(
+      `/api/v1/getonearticlemax?id=${encodeURIComponent(maxArticleId)}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "*/*",
+          "User-Agent": "Thunder Client (https://www.thunderclient.com)",
+        },
       }
+    );
 
-      return customerSpecificationsDataAggregated;
-    };
+    const maxResult = await responseMax.json();
+
+    if (responseMax.ok) {
+      customerSpecificationsDataAggregated.push(maxResult[0]);
+    } else {
+      customerSpecificationsDataAggregated.push({});
+    }
+
+    return customerSpecificationsDataAggregated;
+  };
 
   const handleClick = async () => {
+    console.log(selectedOrders);
+
+    if (selectedOrders.length === 0) {
+      toast.error("Please select an order", { duration: 1000 });
+      return;
+    }
     try {
-      console.log("Selected Orders: ", selectedOrders);
       const pdfs: any[] = [];
+      setButtonLabel("Downloading..."); // inform user that doc is downloading
+      setIsDisabled(true); // disables button during downloading
 
       await Promise.all(
         selectedOrders.map(async (order: any) => {
           // map over selected orders
           const get = (v: any, fallback = "***") =>
             v === null || v === undefined || v === "" ? fallback : String(v);
-          const client = get(undefined); // populated from parent when a row is selected
-          const customer = get(undefined); // populated from parent when a row is selected
+
+          // to be placed at the bottom left of the first page
+          const current_date = new Date().toLocaleDateString("en-GB");
+
+          const company_name = get(order.tbl_customer.company_name);
+
+          let customer: String = "";
+          if (order.tbl_customer.customer_id == null) {
+            customer = "____________________________";
+          } else {
+            customer = get(
+              order.tbl_customer.first_name +
+                " " +
+                order.tbl_customer.middle_name +
+                " " +
+                order.tbl_customer.last_name
+            ).toUpperCase();
+          }
+
           const orderNo = get(order.order_fabrication_control);
 
-          // format delivery date
+          // format delivery date and time
           const deliveryDate = get(order.exit_date_time);
           const deliveryDateFormatted = new Date(
             deliveryDate
@@ -131,7 +168,7 @@ export default function DownloadOrderListView({
             { hour: "2-digit", minute: "2-digit", second: "2-digit" }
           );
 
-          // format production date
+          // format production date and time
           const productionDate = get(order.created_at);
           const productionDateFormatted = new Date(
             productionDate
@@ -144,26 +181,28 @@ export default function DownloadOrderListView({
             second: "2-digit",
           });
 
-          console.log("selected orders: ", order);
+          // fetch customer specifications data
+          const customerSpecificationsData =
+            await GetCustomerSpecificationsData(
+              get(order.tbl_article?.article_nominal) as unknown as number,
+              get(order.tbl_article?.article_min) as unknown as number,
+              get(order.tbl_article?.article_max) as unknown as number
+            );
 
-          
-          const customerSpecificationsData = await GetCustomerSpecificationsData(
-            get(order.tbl_article?.article_nominal) as unknown as number,
-            get(order.tbl_article?.article_min) as unknown as number,
-            get(order.tbl_article?.article_max) as unknown as number  
-          )
+          // customer specifications data
+          const nominal_data = customerSpecificationsData[0];
+          const max_data = customerSpecificationsData[1];
+          const min_data = customerSpecificationsData[2];
 
-          console.log(
-            "Customer Specifications Data:",
-            customerSpecificationsData
-          );
-
+          // dynamically import jspdf to reduce bundle size
           const { default: jsPDF } = await import("jspdf");
+
+          // Page 01 start
           const doc = new jsPDF({ unit: "pt", format: "a4" });
-          const pageWidth = doc.internal.pageSize.getWidth();
+          const pageWidth = doc.internal.pageSize.getWidth(); // stores the width for all pages
           const margin = 40;
 
-          // Try to load logo from public path and place it on the PDF
+          // Try to load logo from public path and place it on the PDF page1
           try {
             const logo = new Image();
             logo.src = "/Img/corexlogo.png";
@@ -179,16 +218,16 @@ export default function DownloadOrderListView({
           } catch {}
 
           // Right header text
-          drawRightHeader(doc, "AQ 30", margin);
+          drawRightHeader(doc, "AQ 30", 1, margin);
 
           // Main header text
-          drawMainHeader(doc, "Corex AG", customer, margin);
+          drawMainHeader(doc, company_name, margin, 1);
 
           // Horizontal line below headers
-          drawHorizontalLine(doc, margin, 155);
+          DrawHorizontalLine(doc, margin, 155);
 
           //Header title: Order
-          drawLeftHeader(doc, "Bestellung / Commande / Order", margin, 175);
+          DrawLeftHeader(doc, "Bestellung / Commande / Order", margin, 175);
 
           // Table with 3 columns and 3 rows (last column merged)
           const tableY = margin + 185;
@@ -226,8 +265,8 @@ export default function DownloadOrderListView({
             margin + 8,
             tableY + 41
           );
-          doc.text(deliveryDateFormatted, margin + col1Width + 15, tableY + 41);
-          doc.text(deliveryDateTime, margin + col1Width + 15, tableY + 53);
+          doc.text(deliveryDateFormatted, margin + col1Width + 15, tableY + 43);
+          doc.text(deliveryDateTime, margin + col1Width + 15, tableY + 55);
 
           // Row 3
           doc.text(
@@ -253,10 +292,10 @@ export default function DownloadOrderListView({
           );
 
           // Horizontal line below Order table
-          drawHorizontalLine(doc, margin, 280);
+          DrawHorizontalLine(doc, margin, 280);
 
           //Header title: Customer specifications
-          drawLeftHeader(
+          DrawLeftHeader(
             doc,
             "Kudenspezifikationen / Spécifications du client / Customer specifications",
             margin,
@@ -323,19 +362,58 @@ export default function DownloadOrderListView({
             doc.text(col1Labels[r], margin + 8, y);
           }
 
-          // Fill placeholder values *** for columns 2-4, rows 2-6
-          const placeholderRows = [1, 2, 3, 4, 5]; // zero-based rows for 2..6
+          // Use row number to determine if length row, inside row, outside row, ...
+          const placeholderRows = [1, 2, 3, 4, 5];
           placeholderRows.forEach((r) => {
             const y = specTableY + r * rowHeight + 16;
-            doc.text("***", colX2 + specColOtherWidth / 2, y, {
-              align: "center",
-            });
-            doc.text("***", colX3 + specColOtherWidth / 2, y, {
-              align: "center",
-            });
-            doc.text("***", colX4 + specColOtherWidth / 2, y, {
-              align: "center",
-            });
+            let data: string = "";
+
+            switch (
+              r // switch data values accordingly
+            ) {
+              case 1:
+                data = "length";
+                break;
+              case 2:
+                data = "inside_diameter";
+                break;
+              case 3:
+                data = "outside_diameter";
+                break;
+              case 4:
+                data = "flat_crush";
+                break;
+              case 5:
+                data = "h20";
+                break;
+            }
+
+            // customer specs table is generated BY ROW
+            doc.text(
+              String(nominal_data[data] ?? "*"),
+              colX2 + specColOtherWidth / 2,
+              y,
+              {
+                // if data does not exist, put *
+                align: "center",
+              }
+            );
+            doc.text(
+              String(max_data[data] ?? "*"),
+              colX3 + specColOtherWidth / 2,
+              y,
+              {
+                align: "center",
+              }
+            );
+            doc.text(
+              String(min_data[data] ?? "*"),
+              colX4 + specColOtherWidth / 2,
+              y,
+              {
+                align: "center",
+              }
+            );
           });
 
           // Horizontal line separator with dark blue color
@@ -346,11 +424,13 @@ export default function DownloadOrderListView({
           //Header title: Order
           doc.setFont("times new roman", "bolditalic");
           doc.setFontSize(12);
-          doc.text(
+
+          //Header title: Customer specifications
+          DrawLeftHeader(
+            doc,
             "Kontrolergebnisse / Resultats de constrole / Control results",
             margin,
-            margin + 500,
-            { align: "left" }
+            500
           );
 
           // Control results table: 6 rows x 5 columns (Label + x̄, Min (X), Max (X), σ (X))
@@ -434,9 +514,7 @@ export default function DownloadOrderListView({
           });
 
           // Horizontal line separator with dark blue color
-          doc.setDrawColor(30, 58, 138); // Dark blue color
-          doc.setLineWidth(2);
-          doc.line(margin, margin + 680, pageWidth - margin, margin + 680);
+          DrawHorizontalLine(doc, margin, 680);
 
           // Footer table: 3 columns x 2 rows
           const pageHeight = doc.internal.pageSize.getHeight();
@@ -461,10 +539,19 @@ export default function DownloadOrderListView({
 
           // First column content
           doc.text("Datum / Date", fColX1 + 8, footerTableY + 15);
-          doc.text("***", fColX1 + 8, footerTableY + footerRowHeight + 15);
 
+          doc.setFont("times new roman", "bolditalic");
+          doc.text(
+            `${current_date}`,
+            fColX1 + 8,
+            footerTableY + footerRowHeight + 15
+          );
+
+          doc.setFont("times new roman", "italic");
           // Second column content
-          doc.text("***", fColX2 + 8, footerTableY + 15);
+          doc.text(`${customer}`, fColX2 + 8, footerTableY + 15, {
+            align: "center",
+          });
           doc.text(
             "Unterschfrit / Signature",
             fColX2 + 8,
@@ -481,6 +568,85 @@ export default function DownloadOrderListView({
             { align: "center" }
           );
 
+          // Page 02 start
+          doc.addPage();
+
+          // Try to load logo from public path and place it on the PDF
+          try {
+            const logo = new Image();
+            logo.src = "/Img/corexlogo.png";
+            await logo.decode();
+            doc.addImage(
+              logo as HTMLImageElement,
+              "PNG",
+              margin,
+              margin,
+              200,
+              70
+            );
+          } catch {}
+
+          // Right header text
+          drawRightHeader(doc, "AQ 30", 2, margin);
+
+          // Main header text
+          drawMainHeader(doc, company_name, margin, 2);
+
+          // Horizontal line below headers
+          DrawHorizontalLine(doc, margin, 130);
+
+          // Draw the first graph
+
+          DrawGraph(doc, nominal_data["length"], margin);
+
+          // Horizontal line for footer
+          DrawHorizontalLine(doc, margin, 720);
+
+          // Draw Footer
+          DrawFooter(
+            doc,
+            margin, // used to map x position
+            orderNo,
+            current_date
+          );
+          // Page 03 start
+          doc.addPage();
+
+          // Try to load logo from public path and place it on the PDF
+          try {
+            const logo = new Image();
+            logo.src = "/Img/corexlogo.png";
+            await logo.decode();
+            doc.addImage(
+              logo as HTMLImageElement,
+              "PNG",
+              margin,
+              margin,
+              200,
+              70
+            );
+          } catch {}
+
+          // Right header text
+          drawRightHeader(doc, "AQ 30", 3, margin);
+
+          // Main header text
+          drawMainHeader(doc, company_name, margin, 3);
+
+          // Horizontal line below headers
+          DrawHorizontalLine(doc, margin, 130);
+
+          // Horizontal line for footer
+          DrawHorizontalLine(doc, margin, 720);
+
+          // Draw Footer
+          DrawFooter(
+            doc,
+            margin, // used to map x position
+            orderNo,
+            current_date
+          );
+
           pdfs.push(doc); // collect blobs for zip
         })
       );
@@ -490,11 +656,13 @@ export default function DownloadOrderListView({
         const zip = new JSZip();
         pdfs.forEach((pdfDoc, index) => {
           const pdfBlob = pdfDoc.output("blob");
-          zip.file(`quality_control_report_${index + 1}.pdf`, pdfBlob);
+          zip.file(`quality_control_report_${index + 1}.doc`, pdfBlob);
         });
         const zipBlob = await zip.generateAsync({ type: "blob" });
         saveAs(zipBlob, "quality_control_reports.zip");
         toast.success("ZIP with PDFs downloaded");
+        setIsDisabled(false);
+        setButtonLabel("Download");
       } else {
         // isa lang ka file ang idownload or preview
         // Generate PDF blob for preview
@@ -509,6 +677,8 @@ export default function DownloadOrderListView({
             (window as any).__lastPdfUrl = url; // Access from DevTools: window.__lastPdfUrl
             window.open(url);
             toast.success("PDF generated for preview");
+            setIsDisabled(false);
+            setButtonLabel("Download");
             return;
           }
         }
@@ -516,21 +686,26 @@ export default function DownloadOrderListView({
         if (mode === "download" || mode === "both") {
           pdfs[0].save(fileName);
           toast.success("PDF downloaded");
+          setIsDisabled(false);
+          setButtonLabel("Download");
         }
       }
     } catch (err) {
       console.error("Failed to generate PDF:", err);
       toast.error("Failed to generate PDF");
+      setIsDisabled(false);
+      setButtonLabel("Download");
     }
   };
 
   return (
     <button
       onClick={handleClick}
+      disabled={isDisabled}
       className={`btn ${className}`}
-      style={{ backgroundColor: "#1d4ed8", color: "#fff" }}
+      style={isDisabled ? { ...baseStyle, ...disabledStyle } : baseStyle}
     >
-      {label}
+      {buttonLabel}
     </button>
   );
 }
