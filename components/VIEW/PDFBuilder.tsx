@@ -6,6 +6,7 @@ import jsPDF from "jspdf";
 export function drawRightHeader(
   doc: jsPDF,
   text: string,
+  page_number: number = 0,
   y: number = 40 // margin from top
 ) {
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -20,7 +21,7 @@ export function drawRightHeader(
   // Indices text below right header
   doc.setFont("times new roman", "italic");
   doc.setFontSize(15);
-  doc.text("Indices: 0", pageWidth - y, y + 50, {
+  doc.text(`Indices: ${page_number}`, pageWidth - y, y + 50, {
     align: "right",
   });
 }
@@ -31,38 +32,56 @@ export function drawRightHeader(
 export function drawMainHeader(
   doc: jsPDF,
   client: string,
-  customer: string,
-  margin: number = 40 // used to map x position
+  margin: number = 40, // used to map x position
+  page_number: number = 0
 ) {
   const pageWidth = doc.internal.pageSize.getWidth();
+  if (page_number === 1) {
+    // Main header text
+    doc.setFont("times new roman", "italic");
+    doc.setFontSize(12);
+    doc.text(
+      "Prufkontrol Bericht / Rapport de controle qualite / Quality control report",
+      pageWidth / 2,
+      margin + 85,
+      { align: "center" }
+    );
 
-  // Main header text
-  doc.setFont("times new roman", "italic");
-  doc.setFontSize(12);
-  doc.text(
-    "Prufkontrol Bericht / Rapport de controle qualite / Quality control report",
-    pageWidth / 2,
-    margin + 85,
-    { align: "center" }
-  );
+    // Header for client
+    doc.setFont("times new roman", "italic");
+    doc.setFontSize(10);
+    doc.text("Kunde", margin, margin + 110, { align: "left" });
+    doc.text(`Client`, margin, margin + 125, {
+      align: "left",
+    });
+    doc.text(`Customer`, margin, margin + 140, { align: "left" });
 
-  // Header for client ]
-  doc.setFont("times new roman", "italic");
-  doc.setFontSize(10);
-  doc.text("Kunde:", margin, margin + 110, { align: "left" });
-  doc.text(`Client: ${client}`, margin, margin + 125, {
-    align: "left",
-  });
-  doc.text(`Customer: ${customer}`, margin, margin + 140, { align: "left" });
+    doc.setFont("times new roman", "bolditalic");
+    doc.setFontSize(23);
+    doc.text(`${client}`, pageWidth - margin, margin + 130, { align: "right" });
+  } else {
+    // Header for client
+    doc.setFont("times new roman", "italic");
+    doc.setFontSize(10);
+    doc.text("Kunde", margin, margin + 85, { align: "left" });
+    doc.text(`Client`, margin, margin + 100, {
+      align: "left",
+    });
+    doc.text(`Customer`, margin, margin + 115, { align: "left" });
+
+    doc.setFont("times new roman", "bolditalic");
+    doc.setFontSize(23);
+    doc.text(`${client}`, pageWidth - margin, margin + 110, { align: "right" });
+  }
 }
 
 /**
  * Draws a horizontal line below the headers
  */
-export function drawHorizontalLine(
-  doc: jsPDF, 
-  margin: number, 
-  y: number
+export function DrawHorizontalLine(
+  doc: jsPDF,
+  margin: number,
+  y: number // specifies the y-coordinate start of the line
 ) {
   const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -75,7 +94,7 @@ export function drawHorizontalLine(
 /**
  * Draws a left-aligned header with the given text
  */
-export function drawLeftHeader(
+export function DrawLeftHeader(
   doc: jsPDF,
   text: string,
   margin: number = 40, // used to map x position
@@ -86,5 +105,41 @@ export function drawLeftHeader(
   doc.setFontSize(12);
   doc.text(`${text}`, margin, margin + y, {
     align: "left",
+  });
+}
+
+export function DrawGraph( // test for nominal first
+  doc: jsPDF,
+  length: number,
+  margin: number = 40 // used to map x position
+) {
+  doc.setFont("times new roman", "bold");
+  doc.setFontSize(12);
+  doc.text("Lange", margin + 30, margin + 200, { align: "left" });
+  doc.text("Longueur", margin + 30, margin + 215, { align: "left" });
+  doc.text("Length", margin + 30, margin + 230, { align: "left" });
+  doc.text("(mm)", margin + 30, margin + 245, { align: "left" });
+}
+
+export function DrawFooter(
+  doc: jsPDF,
+  margin: number = 40, // used to map x position
+  order_number: String = "",
+  date: String = ""
+) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  doc.setFont("times new roman", "bold");
+  doc.setFontSize(10);
+  doc.text(`${date}`, margin, margin + 740, { align: "left" });
+  doc.setFont("times new roman", "bold");
+
+  doc.setFont("times new roman", "bold");
+  doc.text(String(order_number), pageWidth / 2 + 5, margin + 740, {
+    align: "center",
+  });
+
+  doc.text(`cartes de contrôle`, pageWidth - margin, margin + 740, {
+    align: "right",
   });
 }
