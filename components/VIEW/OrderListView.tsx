@@ -1040,7 +1040,6 @@ export default function OrderListView() {
               <label className="text-black invisible">End Date: </label>
               <DownloadOrderListView
                 className="my-auto"
-                label="Download"
                 selectedOrders={selectedOrders}
               />
             </div>
