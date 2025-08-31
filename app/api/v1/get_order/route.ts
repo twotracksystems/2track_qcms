@@ -10,15 +10,28 @@ export async function GET(req: NextRequest) {
 
   const supabase = await createClient();
 
-  // Base query with sorting
-  let query = supabase
-    .from("tbl_orders_form")
-    .select("* ,tbl_customer(*),tbl_article(*)", { count: "exact" })
-    .eq("is_exist", true)
-    .ilike("order_fabrication_control", `%${search}%`)
-    .order("created_at", { ascending: false, nullsFirst: false })
+  // Determine if the user is searching for a company name (contains letters)
+  const term = (search || "").trim();
+  const isCompanySearch = term !== "" && /[A-Za-z]/.test(term);
 
-    .range((page - 1) * limit, page * limit - 1);
+  // Base query with sorting
+  let query = isCompanySearch
+    ? // Company name search: join customer and filter by company_name (case-insensitive)
+      supabase
+        .from("tbl_orders_form")
+        .select("*, tbl_customer!inner(*), tbl_article(*)", { count: "exact" })
+        .eq("is_exist", true)
+        .filter("tbl_customer.company_name", "ilike", `%${term}%`)
+        .order("created_at", { ascending: false, nullsFirst: false })
+        .range((page - 1) * limit, page * limit - 1)
+    : // OF ID search (original behavior): keep existing filter untouched
+      supabase
+        .from("tbl_orders_form")
+        .select("* ,tbl_customer(*),tbl_article(*)", { count: "exact" })
+        .eq("is_exist", true)
+        .ilike("order_fabrication_control", `%${search}%`)
+        .order("created_at", { ascending: false, nullsFirst: false })
+        .range((page - 1) * limit, page * limit - 1);
 
   // Add date filters
   if (startDate && endDate) {
