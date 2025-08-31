@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
-
+import { Chart, ChartConfiguration } from "chart.js";
+import { useRef } from "react";
 /**
  * Draws a page header with centered text
  */
@@ -108,17 +109,35 @@ export function DrawLeftHeader(
   });
 }
 
-export function DrawGraph( // test for nominal first
+export function DrawGraphLabel( // test for nominal first
   doc: jsPDF,
+  section: string,
   length: number,
-  margin: number = 40 // used to map x position
+  margin: number = 40, // used to map x position
+  chartImage: string // base 64 image data
 ) {
+  let x = 30
+  let chart_X = 100
+  let y = 200
+
+  switch(section) {
+    case "length":
+      break;
+    case "inside":
+
+  }
+
   doc.setFont("times new roman", "bold");
   doc.setFontSize(12);
   doc.text("Lange", margin + 30, margin + 200, { align: "left" });
   doc.text("Longueur", margin + 30, margin + 215, { align: "left" });
   doc.text("Length", margin + 30, margin + 230, { align: "left" });
   doc.text("(mm)", margin + 30, margin + 245, { align: "left" });
+
+  // Add the Chart
+  if (chartImage) {
+    doc.addImage(chartImage, "PNG", margin + 100, margin + 150, 400, 150);
+  }
 }
 
 export function DrawFooter(

@@ -4,7 +4,7 @@ import toast from "react-hot-toast";
 import { createClient } from "@/utils/supabase/client";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { create } from "domain";
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 
@@ -13,7 +13,7 @@ import { Doughnut } from "react-chartjs-2";
 
 import {
   DrawFooter,
-  DrawGraph,
+  DrawGraphLabel,
   DrawHorizontalLine,
   DrawLeftHeader,
   drawMainHeader,
@@ -24,6 +24,7 @@ import {
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { Duration } from "luxon";
+import { Chart, ChartConfiguration } from "chart.js/auto";
 
 interface DownloadOrderListViewProps {
   label?: string;
@@ -34,12 +35,18 @@ interface DownloadOrderListViewProps {
   selectedOrders?: any; // Array of selected order objects
 }
 
+type chartData = {
+  // declaration type will be used for the charts
+  data: number;
+  id: string;
+};
+
 export default function DownloadOrderListView({
   label = "Download",
   className = "",
   fileName = "quality_control_report.doc",
   onPDFGenerated,
-  mode = "both",
+  mode = "preview",
   selectedOrders, // Array of selected order objects from the rows
 }: DownloadOrderListViewProps) {
   const baseStyle = { backgroundColor: "#1d4ed8", color: "#fff" };
@@ -47,6 +54,8 @@ export default function DownloadOrderListView({
 
   const [isDisabled, setIsDisabled] = useState(false);
   const [buttonLabel, setButtonLabel] = useState("Download");
+
+  const canvasRef = useRef<HTMLCanvasElement>(null); // used to refer to the canvas element containing the chart
 
   // function to get control results
   const GetControlResults = async () => {};
@@ -120,6 +129,27 @@ export default function DownloadOrderListView({
     return customerSpecificationsDataAggregated;
   };
 
+  const GetMeasurementData = async (orderId: number) => {
+    const responseMeasurementData = await fetch(
+      `/api/v1/getonemeasurement?id=${encodeURIComponent(orderId)}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "*/*",
+          "User-Agent": "Thunder Client (https://www.thunderclient.com)",
+        },
+      }
+    );
+
+    const measurementData = await responseMeasurementData.json();
+
+    if (responseMeasurementData.ok) {
+      return measurementData;
+    } else {
+      toast.error;
+    }
+  };
+
   const handleClick = async () => {
     console.log(selectedOrders);
 
@@ -155,7 +185,7 @@ export default function DownloadOrderListView({
                 order.tbl_customer.last_name
             ).toUpperCase();
           }
-
+          // get order fabrication control number
           const orderNo = get(order.order_fabrication_control);
 
           // format delivery date and time
@@ -193,6 +223,14 @@ export default function DownloadOrderListView({
           const nominal_data = customerSpecificationsData[0];
           const max_data = customerSpecificationsData[1];
           const min_data = customerSpecificationsData[2];
+          console.log("order data: ", order);
+
+          // fetch measurements data for page 02
+          const measurementData = await GetMeasurementData(
+            get(order.id) as unknown as number
+          );
+
+          console.log("measurement data: ", measurementData);
 
           // dynamically import jspdf to reduce bundle size
           const { default: jsPDF } = await import("jspdf");
@@ -571,6 +609,18 @@ export default function DownloadOrderListView({
           // Page 02 start
           doc.addPage();
 
+          const lengthData: chartData[] = measurementData.map(
+            (lengthInstance: any) => ({
+              data: lengthInstance["length"],
+              id: lengthInstance["id"],
+            })
+          );
+
+          const lengthLabels = lengthData.map((item) => item.id);
+          const lengthValues = lengthData.map((item) => item.data);
+
+          console.log("length data to plot: ", lengthData);
+
           // Try to load logo from public path and place it on the PDF
           try {
             const logo = new Image();
@@ -586,6 +636,13 @@ export default function DownloadOrderListView({
             );
           } catch {}
 
+          const lengthLineChartImage = await generateLineChartImage(
+            canvasRef.current!,
+            lengthLabels, // your measurement IDs
+            lengthValues, // your measurement values
+            "Length"
+          );
+
           // Right header text
           drawRightHeader(doc, "AQ 30", 2, margin);
 
@@ -597,7 +654,13 @@ export default function DownloadOrderListView({
 
           // Draw the first graph
 
-          DrawGraph(doc, nominal_data["length"], margin);
+          DrawGraphLabel(
+            doc,
+            "length",
+            nominal_data["length"],
+            margin,
+            lengthLineChartImage
+          );
 
           // Horizontal line for footer
           DrawHorizontalLine(doc, margin, 720);
@@ -717,14 +780,77 @@ export default function DownloadOrderListView({
     }
   };
 
+  async function generateLineChartImage(
+    canvas: HTMLCanvasElement,
+    labels: string[],
+    values: number[],
+    chartLabel: string
+  ): Promise<string> {
+    return new Promise((resolve) => {
+      // Destroy old instance if it exists
+      if (canvas && Chart.getChart(canvas)) {
+        Chart.getChart(canvas)?.destroy();
+      }
+
+      const ctx = canvas.getContext("2d")!;
+      const chart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: chartLabel,
+              data: values,
+              borderColor: "rgba(29, 78, 216, 1)", // blue
+              backgroundColor: "rgba(29, 78, 216, 0.2)",
+              borderWidth: 2,
+              tension: 0.3,
+              fill: true,
+            },
+          ],
+        },
+        options: {
+          responsive: false,
+          animation: false, // important so image is rendered immediately
+          plugins: { legend: { display: true } },
+          scales: {
+            y: {
+              ticks: {
+                stepSize: 2,
+              },
+              // optional: set min/max to force the axis to cover your data range
+              min: Math.min(...values),
+              max: Math.max(...values) + 500,
+            },
+          },
+        },
+      });
+
+      // Wait for chart to finish rendering
+      setTimeout(() => {
+        const imageUrl = canvas.toDataURL("image/png");
+        chart.destroy(); // free up the canvas for reuse
+        resolve(imageUrl);
+      }, 50); // short delay so chart paints
+    });
+  }
+
   return (
-    <button
-      onClick={handleClick}
-      disabled={isDisabled}
-      className={`btn ${className}`}
-      style={isDisabled ? { ...baseStyle, ...disabledStyle } : baseStyle}
-    >
-      {buttonLabel}
-    </button>
+    <div>
+      <button
+        onClick={handleClick}
+        disabled={isDisabled}
+        className={`btn ${className}`}
+        style={isDisabled ? { ...baseStyle, ...disabledStyle } : baseStyle}
+      >
+        {buttonLabel}
+      </button>
+      <canvas
+        ref={canvasRef}
+        width="400"
+        height="200"
+        style={{ display: "none" }}
+      />
+    </div>
   );
 }
