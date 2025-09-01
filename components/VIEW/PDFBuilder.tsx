@@ -1,10 +1,9 @@
 import jsPDF from "jspdf";
-import { Chart, ChartConfiguration } from "chart.js";
-import { useRef } from "react";
+import { autoTable } from "jspdf-autotable";
 /**
  * Draws a page header with centered text
  */
-export function drawRightHeader(
+export function DrawRightHeader(
   doc: jsPDF,
   text: string,
   page_number: number = 0,
@@ -30,7 +29,7 @@ export function drawRightHeader(
 /**
  * Draws the main header with centered text and client/customer info
  */
-export function drawMainHeader(
+export function DrawMainHeader(
   doc: jsPDF,
   client: string,
   margin: number = 40, // used to map x position
@@ -109,34 +108,69 @@ export function DrawLeftHeader(
   });
 }
 
-export function DrawGraphLabel( // test for nominal first
+export function DrawGraphLabel(
   doc: jsPDF,
   section: string,
-  length: number,
   margin: number = 40, // used to map x position
   chartImage: string // base 64 image data
 ) {
-  let x = 30
-  let chart_X = 100
-  let y = 200
+  let label_x_pos = margin + 20;
+  let label_y_pos = 0;
+  let chart_x_pos = margin + 100;
+  let chart_y_pos = 0;
 
-  switch(section) {
+  let chart_width = 410;
+  let chart_height = 105;
+
+  let label: string[] = [];
+
+  switch (section) {
     case "length":
+      label = ["Länge", "Longueur", "Length", "mm"];
+      label_y_pos = margin + 170;
+      chart_y_pos = margin + 150;
       break;
     case "inside":
-
+      label = ["Innen Ø", "Ø Intérieur", "Inside Ø", "mm"];
+      label_y_pos = margin + 280;
+      chart_y_pos = margin + 260;
+      break;
+    case "outside":
+      label = ["Aussen Ø", "Ø Extérieur", "Outside Ø", "mm"];
+      label_y_pos = margin + 390;
+      chart_y_pos = margin + 370;
+      break;
+    case "flat_crush":
+      label = ["Flat Crush", "(kN / dm)"];
+      label_y_pos = margin + 500;
+      chart_y_pos = margin + 480;
+      break;
+    case "h2o":
+      label = ["H2O", "(%)"];
+      label_y_pos = margin + 610;
+      chart_y_pos = margin + 590;
+      break;
   }
 
   doc.setFont("times new roman", "bold");
   doc.setFontSize(12);
-  doc.text("Lange", margin + 30, margin + 200, { align: "left" });
-  doc.text("Longueur", margin + 30, margin + 215, { align: "left" });
-  doc.text("Length", margin + 30, margin + 230, { align: "left" });
-  doc.text("(mm)", margin + 30, margin + 245, { align: "left" });
+
+  label.map((label, index) => {
+    // Loop through the different labels
+    doc.text(label, label_x_pos, label_y_pos, { align: "left" });
+    label_y_pos += 15;
+  });
 
   // Add the Chart
   if (chartImage) {
-    doc.addImage(chartImage, "PNG", margin + 100, margin + 150, 400, 150);
+    doc.addImage(
+      chartImage,
+      "PNG",
+      chart_x_pos,
+      chart_y_pos,
+      chart_width,
+      chart_height
+    );
   }
 }
 
@@ -160,5 +194,114 @@ export function DrawFooter(
 
   doc.text(`cartes de contrôle`, pageWidth - margin, margin + 740, {
     align: "right",
+  });
+}
+
+export function DrawMeasurementTables(
+  doc: jsPDF,
+  margin: number = 40,
+  measurementData: any[]
+) {
+  const measurementsHead = [
+    ["Pal Nr", "L (mm)", "Ø in (mm)", "Ø out (mm)", "OK"],
+  ];
+  const flatCrushH2oHead = [["Flat Crush (kN / dm)", "H2O (%)"]];
+  const measurementsBody: any[][] = [];
+  const flatCrushH2oBody: any[][] = [];
+
+  measurementData.map((data: any, index) => {
+    let pallete_count = data["pallete_count"];
+    let length = data["length"];
+    let inside_diameter = data["inside_diameter"];
+    let outside_diameter = data["outside_diameter"];
+    let ok_value = "";
+
+    // Skip pushing row if pallete_count is missing/0/null
+    if (!pallete_count || pallete_count === 0) {
+      return;
+    }
+
+    if (length === 0 || length === null) {
+      length = "";
+    }
+
+    if (inside_diameter === 0 || inside_diameter === null) {
+      inside_diameter = "";
+    }
+
+    if (outside_diameter === 0 || outside_diameter === null) {
+      outside_diameter = "";
+    }
+
+    measurementsBody.push([
+      pallete_count,
+      length,
+      inside_diameter,
+      outside_diameter,
+      ok_value,
+    ]);
+  });
+
+  measurementData.forEach((data: any, index) => {
+    const flat_crush = data["flat_crush"];
+    const h2o = data["h20"];
+
+    // Only push if both values are nonzero and not null
+    if (flat_crush || h2o) {
+      flatCrushH2oBody.push([
+        flat_crush || "", // fallback to empty string if missing
+        h2o || "",
+      ]);
+    }
+  });
+
+  autoTable(doc, {
+    margin: margin + 30,
+    startY: 180, // where the table starts on the Y axis
+    head: measurementsHead, // table headers
+    body: measurementsBody, // table rows
+    theme: "grid", // can be 'striped', 'grid', or 'plain'
+    tableWidth: "wrap",
+    pageBreak: "avoid",
+    styles: {
+      fontSize: 10,
+      halign: "center",
+      valign: "middle",
+      font: "times",
+      cellWidth: "wrap",
+      lineWidth: 1,
+      lineColor: "black",
+    },
+    headStyles: {
+      fontStyle: "bolditalic",
+      cellWidth: "wrap",
+      halign: "center",
+      fillColor: false,
+      textColor: "black",
+    },
+    bodyStyles: {
+      fontSize: 10,
+      halign: "center",
+      valign: "middle",
+      font: "times",
+      cellWidth: "wrap",
+    },
+  });
+
+  autoTable(doc, {
+    margin: margin * 2 + 250,
+    startY: 180, // where the table starts on the Y axis
+    head: flatCrushH2oHead, // table headers
+    body: flatCrushH2oBody, // table rows
+    theme: "grid", // can be 'striped', 'grid', or 'plain'
+    tableWidth: "wrap",
+    headStyles: {
+      fontStyle: "bolditalic",
+      halign: "center",
+      fillColor: false,
+      textColor: "black",
+      lineColor: "black",
+      lineWidth: 1,
+    },
   });
 }

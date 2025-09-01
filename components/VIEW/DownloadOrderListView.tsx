@@ -9,22 +9,24 @@ import { useState, useRef } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 // packages to generate the different charts
-import { Doughnut } from "react-chartjs-2";
+import { Chart } from "chart.js/auto";
+import ChartDataLabels from "chartjs-plugin-datalabels";
+Chart.register(ChartDataLabels);
 
+// necessary functions in building the PDF files
 import {
   DrawFooter,
   DrawGraphLabel,
   DrawHorizontalLine,
   DrawLeftHeader,
-  drawMainHeader,
-  drawRightHeader,
+  DrawMainHeader,
+  DrawRightHeader,
+  DrawMeasurementTables,
 } from "./PDFBuilder";
 
 // necessary packages for exporting zip files
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
-import { Duration } from "luxon";
-import { Chart, ChartConfiguration } from "chart.js/auto";
 
 interface DownloadOrderListViewProps {
   label?: string;
@@ -38,7 +40,7 @@ interface DownloadOrderListViewProps {
 type chartData = {
   // declaration type will be used for the charts
   data: number;
-  id: string;
+  id: number;
 };
 
 export default function DownloadOrderListView({
@@ -230,7 +232,10 @@ export default function DownloadOrderListView({
             get(order.id) as unknown as number
           );
 
-          console.log("measurement data: ", measurementData);
+          console.log(
+            `measurement data for order no ${orderNo}: `,
+            measurementData
+          );
 
           // dynamically import jspdf to reduce bundle size
           const { default: jsPDF } = await import("jspdf");
@@ -256,10 +261,10 @@ export default function DownloadOrderListView({
           } catch {}
 
           // Right header text
-          drawRightHeader(doc, "AQ 30", 1, margin);
+          DrawRightHeader(doc, "AQ 30", 1, margin);
 
           // Main header text
-          drawMainHeader(doc, company_name, margin, 1);
+          DrawMainHeader(doc, company_name, margin, 1);
 
           // Horizontal line below headers
           DrawHorizontalLine(doc, margin, 155);
@@ -609,17 +614,86 @@ export default function DownloadOrderListView({
           // Page 02 start
           doc.addPage();
 
-          const lengthData: chartData[] = measurementData.map(
-            (lengthInstance: any) => ({
+          // LENGTH DATA
+          const lengthData: chartData[] = measurementData // use the length data in the measurements table of the order ID
+            .map((lengthInstance: any) => ({
               data: lengthInstance["length"],
               id: lengthInstance["id"],
-            })
+            }))
+            .sort((a: chartData, b: chartData) => a.id - b.id); // sort ascendingly
+
+          const lengthLineChartImage = await generateLineChartImage(
+            canvasRef.current!,
+            lengthData
           );
 
-          const lengthLabels = lengthData.map((item) => item.id);
-          const lengthValues = lengthData.map((item) => item.data);
+          console.log(`length data to plot for order ${orderNo}: `, lengthData);
 
-          console.log("length data to plot: ", lengthData);
+          // INSIDE DATA
+          const insideData: chartData[] = measurementData // use the inside diameter data in the measurements table of the order ID
+            .map((insideInstance: any) => ({
+              data: insideInstance["inside_diameter"],
+              id: insideInstance["id"],
+            }))
+            .sort((a: chartData, b: chartData) => a.id - b.id);
+
+          const insideLineChartImage = await generateLineChartImage(
+            canvasRef.current!,
+            insideData
+          );
+
+          console.log(`inside data to plot for order ${orderNo}: `, insideData);
+
+          // OUTSIDE DATA
+          const outsideData: chartData[] = measurementData // use the outside diameter data in the measurements table of the order ID
+            .map((outsideInstance: any) => ({
+              data: outsideInstance["outside_diameter"],
+              id: outsideInstance["id"],
+            }))
+            .sort((a: chartData, b: chartData) => a.id - b.id);
+
+          const outsideLineChartImage = await generateLineChartImage(
+            canvasRef.current!,
+            outsideData
+          ).then();
+
+          console.log(
+            `outside data to plot for order ${orderNo}: `,
+            outsideData
+          );
+
+          // FLAT CRUSH DATA
+          const flatCrushData: chartData[] = measurementData // use the flat crush data in the measurements table of the order ID
+            .map((flatCrushInstance: any) => ({
+              data: flatCrushInstance["flat_crush"],
+              id: flatCrushInstance["id"],
+            }))
+            .sort((a: chartData, b: chartData) => a.id - b.id);
+
+          const flatCrushLineChartImage = await generateLineChartImage(
+            canvasRef.current!,
+            flatCrushData
+          );
+
+          console.log(
+            `flat crush data to plot for order ${orderNo}: `,
+            flatCrushData
+          );
+
+          // H2O DATA
+          const h2oData: chartData[] = measurementData // use the h2O data in the measurements table of the order ID
+            .map((h2oInstance: any) => ({
+              data: h2oInstance["h20"],
+              id: h2oInstance["id"],
+            }))
+            .sort((a: chartData, b: chartData) => a.id - b.id);
+
+          const h2oLineChartImage = await generateLineChartImage(
+            canvasRef.current!,
+            h2oData
+          );
+
+          console.log(`H2O data to plot for order ${orderNo}: `, flatCrushData);
 
           // Try to load logo from public path and place it on the PDF
           try {
@@ -636,31 +710,29 @@ export default function DownloadOrderListView({
             );
           } catch {}
 
-          const lengthLineChartImage = await generateLineChartImage(
-            canvasRef.current!,
-            lengthLabels, // your measurement IDs
-            lengthValues, // your measurement values
-            "Length"
-          );
-
           // Right header text
-          drawRightHeader(doc, "AQ 30", 2, margin);
+          DrawRightHeader(doc, "AQ 30", 2, margin);
 
           // Main header text
-          drawMainHeader(doc, company_name, margin, 2);
+          DrawMainHeader(doc, company_name, margin, 2);
 
           // Horizontal line below headers
           DrawHorizontalLine(doc, margin, 130);
 
-          // Draw the first graph
+          // Draw the first graph [Length]
+          DrawGraphLabel(doc, "length", margin, lengthLineChartImage);
 
-          DrawGraphLabel(
-            doc,
-            "length",
-            nominal_data["length"],
-            margin,
-            lengthLineChartImage
-          );
+          // Draw the second graph [Inside diameter]
+          DrawGraphLabel(doc, "inside", margin, insideLineChartImage);
+
+          // Draw the third graph [Outside diameter]
+          DrawGraphLabel(doc, "outside", margin, outsideLineChartImage);
+
+          // Draw the fourth graph [flat crush]
+          DrawGraphLabel(doc, "flat_crush", margin, flatCrushLineChartImage);
+
+          // Draw the last graph [h20]
+          DrawGraphLabel(doc, "h2o", margin, h2oLineChartImage);
 
           // Horizontal line for footer
           DrawHorizontalLine(doc, margin, 720);
@@ -672,8 +744,11 @@ export default function DownloadOrderListView({
             orderNo,
             current_date
           );
+
           // Page 03 start
           doc.addPage();
+
+          
 
           // Try to load logo from public path and place it on the PDF
           try {
@@ -691,13 +766,16 @@ export default function DownloadOrderListView({
           } catch {}
 
           // Right header text
-          drawRightHeader(doc, "AQ 30", 3, margin);
+          DrawRightHeader(doc, "AQ 30", 3, margin);
 
           // Main header text
-          drawMainHeader(doc, company_name, margin, 3);
+          DrawMainHeader(doc, company_name, margin, 3);
 
           // Horizontal line below headers
           DrawHorizontalLine(doc, margin, 130);
+
+          // Draw the tables in page 03
+          DrawMeasurementTables(doc, margin, measurementData);
 
           // Horizontal line for footer
           DrawHorizontalLine(doc, margin, 720);
@@ -782,57 +860,81 @@ export default function DownloadOrderListView({
 
   async function generateLineChartImage(
     canvas: HTMLCanvasElement,
-    labels: string[],
-    values: number[],
-    chartLabel: string
-  ): Promise<string> {
-    return new Promise((resolve) => {
-      // Destroy old instance if it exists
-      if (canvas && Chart.getChart(canvas)) {
-        Chart.getChart(canvas)?.destroy();
-      }
+    data: chartData[]
+  ) {
+    // Destroy old instance if it exists
+    if (canvas && Chart.getChart(canvas)) {
+      Chart.getChart(canvas)?.destroy();
+    }
 
-      const ctx = canvas.getContext("2d")!;
-      const chart = new Chart(ctx, {
-        type: "line",
-        data: {
-          labels,
-          datasets: [
-            {
-              label: chartLabel,
-              data: values,
-              borderColor: "rgba(29, 78, 216, 1)", // blue
-              backgroundColor: "rgba(29, 78, 216, 0.2)",
-              borderWidth: 2,
-              tension: 0.3,
-              fill: true,
+    const ctx = canvas.getContext("2d")!;
+    const labels = data.map((d) => String(d.id));
+    const values = data.map((d) => d.data);
+
+    const minVal = Math.min(...values);
+    const maxVal = Math.max(...values);
+    const padding = (maxVal - minVal) * 0.1; // 10% headroom
+    const chart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels, // your x values
+        datasets: [
+          {
+            data: values, // your y values
+            borderColor: "rgba(29, 78, 216, 1)",
+            backgroundColor: "rgba(29, 78, 216, 0.2)",
+            borderWidth: 2,
+            tension: 0.3,
+            fill: true,
+            pointRadius: 1,
+            pointHoverRadius: 3,
+          },
+        ],
+      },
+      options: {
+        responsive: false,
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          datalabels: {
+            align: (ctx) => (ctx.dataIndex % 2 === 0 ? "top" : "bottom"), // position above point
+            anchor: "center", // attach to the point
+            font: {
+              size: 8,
             },
-          ],
+            offset: -1,
+            formatter: (value: number) =>
+              value.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }), // show formatted labels too
+          },
         },
-        options: {
-          responsive: false,
-          animation: false, // important so image is rendered immediately
-          plugins: { legend: { display: true } },
-          scales: {
-            y: {
-              ticks: {
-                stepSize: 2,
-              },
-              // optional: set min/max to force the axis to cover your data range
-              min: Math.min(...values),
-              max: Math.max(...values) + 500,
+        scales: {
+          y: {
+            ticks: {
+              stepSize: 5,
+              callback: (value) =>
+                Number(value).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }), // 1,234.56 style
+            },
+            min: minVal - padding,
+            max: maxVal + padding,
+          },
+          x: {
+            ticks: {
+              callback: (value, index) => labels[index],
             },
           },
         },
-      });
-
-      // Wait for chart to finish rendering
-      setTimeout(() => {
-        const imageUrl = canvas.toDataURL("image/png");
-        chart.destroy(); // free up the canvas for reuse
-        resolve(imageUrl);
-      }, 50); // short delay so chart paints
+      },
     });
+
+    const imageUrl = canvas.toDataURL("image/png");
+    chart.destroy(); // free up the canvas for reuse
+    return imageUrl;
   }
 
   return (
