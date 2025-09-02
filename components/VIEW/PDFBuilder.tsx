@@ -12,16 +12,16 @@ export function DrawRightHeader(
   const pageWidth = doc.internal.pageSize.getWidth();
 
   // Right header text
-  doc.setFont("times new roman", "bolditalic");
+  doc.setFont("times", "bolditalic");
   doc.setFontSize(15);
   doc.text(text, pageWidth - y, y + 30, {
     align: "right",
   });
 
   // Indices text below right header
-  doc.setFont("times new roman", "italic");
+  doc.setFont("times", "italic");
   doc.setFontSize(15);
-  doc.text(`Indices: ${page_number}`, pageWidth - y, y + 50, {
+  doc.text(`Indice: 1`, pageWidth - y, y + 50, {
     align: "right",
   });
 }
@@ -38,7 +38,7 @@ export function DrawMainHeader(
   const pageWidth = doc.internal.pageSize.getWidth();
   if (page_number === 1) {
     // Main header text
-    doc.setFont("times new roman", "italic");
+    doc.setFont("times", "italic");
     doc.setFontSize(12);
     doc.text(
       "Prufkontrol Bericht / Rapport de controle qualite / Quality control report",
@@ -48,7 +48,7 @@ export function DrawMainHeader(
     );
 
     // Header for client
-    doc.setFont("times new roman", "italic");
+    doc.setFont("times", "italic");
     doc.setFontSize(10);
     doc.text("Kunde", margin, margin + 110, { align: "left" });
     doc.text(`Client`, margin, margin + 125, {
@@ -56,12 +56,12 @@ export function DrawMainHeader(
     });
     doc.text(`Customer`, margin, margin + 140, { align: "left" });
 
-    doc.setFont("times new roman", "bolditalic");
+    doc.setFont("times", "bolditalic");
     doc.setFontSize(23);
     doc.text(`${client}`, pageWidth - margin, margin + 130, { align: "right" });
   } else {
     // Header for client
-    doc.setFont("times new roman", "italic");
+    doc.setFont("times", "italic");
     doc.setFontSize(10);
     doc.text("Kunde", margin, margin + 85, { align: "left" });
     doc.text(`Client`, margin, margin + 100, {
@@ -69,7 +69,7 @@ export function DrawMainHeader(
     });
     doc.text(`Customer`, margin, margin + 115, { align: "left" });
 
-    doc.setFont("times new roman", "bolditalic");
+    doc.setFont("times", "bolditalic");
     doc.setFontSize(23);
     doc.text(`${client}`, pageWidth - margin, margin + 110, { align: "right" });
   }
@@ -101,7 +101,7 @@ export function DrawLeftHeader(
   y: number // margin from top
 ) {
   //Header title: Order
-  doc.setFont("times new roman", "bolditalic");
+  doc.setFont("times", "bolditalic");
   doc.setFontSize(12);
   doc.text(`${text}`, margin, margin + y, {
     align: "left",
@@ -123,6 +123,23 @@ export function DrawGraphLabel(
   let chart_height = 105;
 
   let label: string[] = [];
+
+  // // image original size (from canvas)
+  // const imgProps = doc.getImageProperties(chartImage);
+  // const imgWidth = imgProps.width;
+  // const imgHeight = imgProps.height;
+
+  // // maintain aspect ratio
+  // const ratio = imgWidth / imgHeight;
+
+  // // scale down while keeping aspect ratio
+  // let renderWidth = chart_width;
+  // let renderHeight = renderWidth / ratio;
+
+  // if (renderHeight > chart_height) {
+  //   renderHeight = chart_height;
+  //   renderWidth = renderHeight * ratio;
+  // }
 
   switch (section) {
     case "length":
@@ -146,13 +163,13 @@ export function DrawGraphLabel(
       chart_y_pos = margin + 480;
       break;
     case "h2o":
-      label = ["H2O", "(%)"];
       label_y_pos = margin + 610;
       chart_y_pos = margin + 590;
+      WriteH2OBold(doc, label_x_pos, label_y_pos)
       break;
   }
 
-  doc.setFont("times new roman", "bold");
+  doc.setFont("times", "bold");
   doc.setFontSize(12);
 
   label.map((label, index) => {
@@ -182,12 +199,12 @@ export function DrawFooter(
 ) {
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  doc.setFont("times new roman", "bold");
+  doc.setFont("times", "bold");
   doc.setFontSize(10);
   doc.text(`${date}`, margin, margin + 740, { align: "left" });
-  doc.setFont("times new roman", "bold");
+  doc.setFont("times", "bold");
 
-  doc.setFont("times new roman", "bold");
+  doc.setFont("times", "bold");
   doc.text(String(order_number), pageWidth / 2 + 5, margin + 740, {
     align: "center",
   });
@@ -195,6 +212,38 @@ export function DrawFooter(
   doc.text(`cartes de contrôle`, pageWidth - margin, margin + 740, {
     align: "right",
   });
+}
+
+export function WriteH2OBold(doc: jsPDF, x: number, y: number) {
+  // Base font size
+  doc.setFontSize(12);
+
+  // Write "H"
+  doc.text("H", x, y);
+
+  // Write "2" smaller and lower (subscript)
+  doc.setFontSize(8);
+  doc.text("2", x + 8, y + 2); // adjust x,y offset as needed
+
+  // Back to normal for "O"
+  doc.setFontSize(12);
+  doc.text("O", x + 11, y);
+}
+
+export function WriteH2OItalic(doc: jsPDF, x: number, y: number) {
+  // Base font size
+  doc.setFontSize(12);
+
+  // Write "H"
+  doc.text("H", x, y);
+
+  // Write "2" smaller and lower (subscript)
+  doc.setFontSize(8);
+  doc.text("2", x + 8, y + 2); // adjust x,y offset as needed
+
+  // Back to normal for "O"
+  doc.setFontSize(12);
+  doc.text("O", x + 11, y);
 }
 
 export function DrawMeasurementTables(
