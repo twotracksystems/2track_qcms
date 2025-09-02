@@ -46,7 +46,7 @@ type chartData = {
 export default function DownloadOrderListView({
   label = "Download",
   className = "",
-  fileName = "quality_control_report.doc",
+  fileName = "quality_control_report.pdf",
   onPDFGenerated,
   mode = "preview",
   selectedOrders, // Array of selected order objects from the rows
@@ -60,7 +60,30 @@ export default function DownloadOrderListView({
   const canvasRef = useRef<HTMLCanvasElement>(null); // used to refer to the canvas element containing the chart
 
   // function to get control results
-  const GetControlResults = async () => {};
+  const GetControlResults = async (orderId: number) => {
+    const orderMeasurementHistory = [];
+
+    const responseOrderMeasurementHistory = await fetch(
+      // index [0] = nominal, index [1] = Max, index [2] = Min
+      `/api/v1/get_measurement_history?id=${encodeURIComponent(orderId)}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "*/*",
+          "User-Agent": "Thunder Client (https://www.thunderclient.com)",
+        },
+      }
+    );
+
+    const OrderMeasurementHistoryResult =
+      await responseOrderMeasurementHistory.json();
+
+    if (OrderMeasurementHistoryResult.ok) {
+      orderMeasurementHistory.push(OrderMeasurementHistoryResult);
+    } else {
+      orderMeasurementHistory.push({});
+    }
+  };
 
   // function to get customer specifications data
   const GetCustomerSpecificationsData = async (
@@ -486,11 +509,6 @@ export default function DownloadOrderListView({
           const ctrlRowHeight = 26;
           const ctrlRows = 6;
 
-          // (Optional borders disabled to keep lines transparent)
-          // doc.setDrawColor(30, 58, 138);
-          // doc.setLineWidth(1);
-          // doc.rect(margin, ctrlTableY, ctrlTableWidth, ctrlRowHeight * ctrlRows);
-
           // Column X positions (5 columns total)
           const ctrlColX2 = margin + ctrlCol1Width;
           const ctrlColX3 = ctrlColX2 + ctrlColOtherWidth;
@@ -503,14 +521,6 @@ export default function DownloadOrderListView({
           const ctrlCenter3 = margin + ctrlCol1Width + ctrlColWidthExact * 1.5;
           const ctrlCenter4 = margin + ctrlCol1Width + ctrlColWidthExact * 2.5;
           const ctrlCenter5 = margin + ctrlCol1Width + ctrlColWidthExact * 3.5;
-
-          // doc.line(ctrlColX2, ctrlTableY, ctrlColX2, ctrlTableY + ctrlRowHeight * ctrlRows);
-          // doc.line(ctrlColX3, ctrlTableY, ctrlColX3, ctrlTableY + ctrlRowHeight * ctrlRows);
-          // doc.line(ctrlColX4, ctrlTableY, ctrlColX4, ctrlTableY + ctrlRowHeight * ctrlRows);
-          // doc.line(ctrlColX5, ctrlTableY, ctrlColX5, ctrlTableY + ctrlRowHeight * ctrlRows);
-          for (let i = 1; i < ctrlRows; i++) {
-            // doc.line(margin, ctrlTableY + i * ctrlRowHeight, margin + ctrlTableWidth, ctrlTableY + i * ctrlRowHeight);
-          }
 
           // Table text
           doc.setFont("times new roman", "italic");
@@ -747,8 +757,6 @@ export default function DownloadOrderListView({
 
           // Page 03 start
           doc.addPage();
-
-          
 
           // Try to load logo from public path and place it on the PDF
           try {
