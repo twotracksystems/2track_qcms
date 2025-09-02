@@ -22,6 +22,7 @@ import {
   DrawMainHeader,
   DrawRightHeader,
   DrawMeasurementTables,
+  WriteH2OItalic
 } from "./PDFBuilder";
 
 // necessary packages for exporting zip files
@@ -37,10 +38,19 @@ interface DownloadOrderListViewProps {
   selectedOrders?: any; // Array of selected order objects
 }
 
+type Measurement = {
+  length?: number;
+  inside_diameter?: number;
+  outside_diameter?: number;
+  flat_crush?: number;
+  h20?: number;
+  [key: string]: any;
+};
+
 type chartData = {
   // declaration type will be used for the charts
   data: number;
-  id: number;
+  palette_count: number;
 };
 
 export default function DownloadOrderListView({
@@ -58,32 +68,6 @@ export default function DownloadOrderListView({
   const [buttonLabel, setButtonLabel] = useState("Download");
 
   const canvasRef = useRef<HTMLCanvasElement>(null); // used to refer to the canvas element containing the chart
-
-  // function to get control results
-  const GetControlResults = async (orderId: number) => {
-    const orderMeasurementHistory = [];
-
-    const responseOrderMeasurementHistory = await fetch(
-      // index [0] = nominal, index [1] = Max, index [2] = Min
-      `/api/v1/get_measurement_history?id=${encodeURIComponent(orderId)}`,
-      {
-        method: "GET",
-        headers: {
-          Accept: "*/*",
-          "User-Agent": "Thunder Client (https://www.thunderclient.com)",
-        },
-      }
-    );
-
-    const OrderMeasurementHistoryResult =
-      await responseOrderMeasurementHistory.json();
-
-    if (OrderMeasurementHistoryResult.ok) {
-      orderMeasurementHistory.push(OrderMeasurementHistoryResult);
-    } else {
-      orderMeasurementHistory.push({});
-    }
-  };
 
   // function to get customer specifications data
   const GetCustomerSpecificationsData = async (
@@ -175,9 +159,155 @@ export default function DownloadOrderListView({
     }
   };
 
-  const handleClick = async () => {
-    console.log(selectedOrders);
+  function calculateStats(data: Measurement[], field: keyof Measurement) {
+    // returns the descriptive statistics of the order measurements
+    const values = data
+      .map((d) => d[field])
+      .filter((v): v is number => typeof v === "number" && !isNaN(v));
 
+    if (values.length === 0) {
+      return { mean: 0, min: 0, max: 0, stdDev: 0 };
+    }
+
+    const n = values.length;
+    const sum = values.reduce((a, b) => a + b, 0);
+    const mean = sum / n;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const variance =
+      values.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / n;
+    const stdDev = Math.sqrt(variance);
+
+    // Helper to fix decimals to 2 places
+    const round2 = (num: number) => Number(num.toFixed(4));
+
+    return {
+      mean: round2(mean),
+      min: round2(min),
+      max: round2(max),
+      stdDev: round2(stdDev),
+    };
+  }
+
+  async function generateLineChartImage(
+    canvas: HTMLCanvasElement,
+    data: chartData[],
+    meanValue: number
+  ) {
+    // Destroy old instance if it exists
+    if (canvas && Chart.getChart(canvas)) {
+      Chart.getChart(canvas)?.destroy();
+    }
+
+    const ctx = canvas.getContext("2d")!;
+    const labels = data.map((d) => String(d.palette_count));
+    const values = data.map((d) => d.data);
+
+    const minVal = Math.min(...values);
+    const maxVal = Math.max(...values);
+    const padding = (maxVal - minVal) * 0.1; // 10% headroom
+    const chart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels, // your x values
+        datasets: [
+          {
+            data: values, // your y values
+            borderColor: "rgba(29, 78, 216, 1)",
+            backgroundColor: "rgba(29, 78, 216, 0.2)",
+            borderWidth: 1,
+            tension: 0.3,
+            pointRadius: 1,
+          },
+          // Mean point dataset
+          {
+            label: "Mean",
+            data: new Array(values.length)
+              .fill(null)
+              .map((_, i) =>
+                i === Math.floor(values.length / 2) ? meanValue : null
+              ),
+            borderColor: "red",
+            backgroundColor: "red",
+            pointRadius: 1.5,
+            pointHoverRadius: 6,
+            showLine: false,
+          },
+        ],
+      },
+      options: {
+        responsive: false,
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          datalabels: {
+            align: (ctx) => (ctx.dataIndex % 2 === 0 ? "top" : "bottom"), // position above point
+            anchor: "center", // attach to the point
+            font: {
+              size: 8,
+            },
+            offset: -1,
+            formatter: (value: number) =>
+              value.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }), // show formatted labels too
+          },
+        },
+        scales: {
+          y: {
+            ticks: {
+              font: {
+                size: 10,
+              },
+              stepSize: 5,
+              callback: (value) =>
+                Number(value).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }), // 1,234.56 style
+            },
+            min: minVal - padding,
+            max: maxVal + padding,
+          },
+          x: {
+            ticks: {
+              font: {
+                size: 10,
+              },
+              callback: (value, index) => labels[index],
+            },
+          },
+        },
+      },
+      plugins: [
+        {
+          id: "meanLine",
+          afterDraw: (chart) => {
+            const yScale = chart.scales.y;
+            const ctx = chart.ctx;
+            const y = yScale.getPixelForValue(meanValue);
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(chart.chartArea.left, y);
+            ctx.lineTo(chart.chartArea.right, y);
+            ctx.strokeStyle = "red";
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([5, 5]); // dashed line
+            ctx.stroke();
+            ctx.restore();
+          },
+        },
+      ],
+    });
+
+    const imageUrl = canvas.toDataURL("image/png");
+    chart.destroy(); // free up the canvas for reuse
+    return imageUrl;
+  }
+
+  const handleClick = async () => {
     if (selectedOrders.length === 0) {
       toast.error("Please select an order", { duration: 1000 });
       return;
@@ -196,9 +326,12 @@ export default function DownloadOrderListView({
           // to be placed at the bottom left of the first page
           const current_date = new Date().toLocaleDateString("en-GB");
 
+          // get company name
           const company_name = get(order.tbl_customer.company_name);
 
           let customer: String = "";
+
+          // get customer name
           if (order.tbl_customer.customer_id == null) {
             customer = "____________________________";
           } else {
@@ -210,8 +343,56 @@ export default function DownloadOrderListView({
                 order.tbl_customer.last_name
             ).toUpperCase();
           }
+
           // get order fabrication control number
           const orderNo = get(order.order_fabrication_control);
+
+          // fetch measurements data
+          const measurementData = await GetMeasurementData(
+            get(order.id) as unknown as number
+          );
+
+          console.log(
+            `measurement data for order no ${orderNo}: `,
+            measurementData
+          );
+
+          // fetch customer specifications data
+          const customerSpecificationsData =
+            await GetCustomerSpecificationsData(
+              get(order.tbl_article?.article_nominal) as unknown as number,
+              get(order.tbl_article?.article_min) as unknown as number,
+              get(order.tbl_article?.article_max) as unknown as number
+            );
+
+          console.log("order data: ", order);
+          console.log(
+            "Customer Specifications data: ",
+            customerSpecificationsData
+          );
+
+          // customer specifications data
+          const nominal_data = customerSpecificationsData[0];
+          const max_data = customerSpecificationsData[1];
+          const min_data = customerSpecificationsData[2];
+
+          // get all the descriptive statistics of the order for each measurement
+          const orderLengthStats = calculateStats(measurementData, "length");
+          const orderInsideDiameterStats = calculateStats(
+            measurementData,
+            "inside_diameter"
+          );
+          const orderOutsideDiameterStats = calculateStats(
+            measurementData,
+            "outside_diameter"
+          );
+          const orderFlatCrushStats = calculateStats(
+            measurementData,
+            "flat_crush"
+          );
+          const orderH2OStats = calculateStats(measurementData, "h20");
+
+          // console.log("length mean: ", orderLengthStats["mean"])
 
           // format delivery date and time
           const deliveryDate = get(order.exit_date_time);
@@ -235,30 +416,6 @@ export default function DownloadOrderListView({
             minute: "2-digit",
             second: "2-digit",
           });
-
-          // fetch customer specifications data
-          const customerSpecificationsData =
-            await GetCustomerSpecificationsData(
-              get(order.tbl_article?.article_nominal) as unknown as number,
-              get(order.tbl_article?.article_min) as unknown as number,
-              get(order.tbl_article?.article_max) as unknown as number
-            );
-
-          // customer specifications data
-          const nominal_data = customerSpecificationsData[0];
-          const max_data = customerSpecificationsData[1];
-          const min_data = customerSpecificationsData[2];
-          console.log("order data: ", order);
-
-          // fetch measurements data for page 02
-          const measurementData = await GetMeasurementData(
-            get(order.id) as unknown as number
-          );
-
-          console.log(
-            `measurement data for order no ${orderNo}: `,
-            measurementData
-          );
 
           // dynamically import jspdf to reduce bundle size
           const { default: jsPDF } = await import("jspdf");
@@ -314,7 +471,7 @@ export default function DownloadOrderListView({
           );
 
           // Add text to cells with better positioning
-          doc.setFont("times new roman", "italic");
+          doc.setFont("times", "italic");
           doc.setFontSize(10);
 
           // Row 1
@@ -348,7 +505,7 @@ export default function DownloadOrderListView({
           doc.text(productionDateTime, margin + col1Width + 15, tableY + 79);
 
           // Merged cell in last column (spans all 3 rows)
-          doc.setFont("times new roman", "bold");
+          doc.setFont("times", "bold");
           doc.setFontSize(10);
           doc.text(
             `N° of ${orderNo}`,
@@ -390,12 +547,12 @@ export default function DownloadOrderListView({
           }
 
           // Table text
-          doc.setFont("times new roman", "italic");
+          doc.setFont("times", "italic");
           doc.setFontSize(10);
 
           // Column headers (row 1)
           // First column header is intentionally blank
-          doc.setFont("times new roman", "bold");
+          doc.setFont("times", "bold");
           doc.text(
             "Scoll Nominal",
             colX2 + specColOtherWidth / 2,
@@ -410,7 +567,7 @@ export default function DownloadOrderListView({
           });
 
           // Restore normal style for body rows
-          doc.setFont("times new roman", "italic");
+          doc.setFont("times", "italic");
 
           // First column labels
           const col1Labels = [
@@ -488,7 +645,7 @@ export default function DownloadOrderListView({
           doc.line(margin, margin + 480, pageWidth - margin, margin + 480);
 
           //Header title: Order
-          doc.setFont("times new roman", "bolditalic");
+          doc.setFont("times", "bolditalic");
           doc.setFontSize(12);
 
           //Header title: Customer specifications
@@ -523,22 +680,25 @@ export default function DownloadOrderListView({
           const ctrlCenter5 = margin + ctrlCol1Width + ctrlColWidthExact * 3.5;
 
           // Table text
-          doc.setFont("times new roman", "italic");
+          doc.setFont("times", "italic");
           doc.setFontSize(10);
 
           // Column headers (row 1) — first column blank
-          doc.setFont("times new roman", "bold");
+          doc.setFont("Helvetica-BoldOblique");
+          doc.getFontList();
           doc.text("x̄", ctrlCenter2, ctrlTableY + 16, { align: "center" });
+          doc.setFont("times", "bolditalic");
           doc.text("Min (X)", ctrlCenter3, ctrlTableY + 16, {
             align: "center",
           });
           doc.text("Max (X)", ctrlCenter4, ctrlTableY + 16, {
             align: "center",
           });
-          doc.text("σ (X)", ctrlCenter5, ctrlTableY + 16, { align: "center" });
+          doc.setFont("symbol", "italic");
+          doc.text("σ(X)", ctrlCenter5, ctrlTableY + 16, { align: "center" });
 
           // Restore normal style for body rows
-          doc.setFont("times new roman", "italic");
+          doc.setFont("times", "italic");
 
           // First column labels
           const ctrlCol1Labels = [
@@ -556,14 +716,47 @@ export default function DownloadOrderListView({
             doc.text(ctrlCol1Labels[r], margin + 8, y);
           }
 
+          WriteH2OItalic(doc, margin + 8, ctrlTableY + 5 * ctrlRowHeight + 16)
+          
           // Fill placeholder values *** for columns 2-5, rows 2-6
-          const ctrlPlaceholderRows = [1, 2, 3, 4, 5]; // zero-based rows for 2..6
+          const statKeys = [
+            null, // row 1 blank
+            "orderLengthStats",
+            "orderInsideDiameterStats",
+            "orderOutsideDiameterStats",
+            "orderFlatCrushStats",
+            "orderH2OStats",
+          ];
+
+          // Map row index to corresponding stats object
+          const ctrlStatsMap = [
+            null, // row 0 = header
+            orderLengthStats, // row 1
+            orderInsideDiameterStats, // row 2
+            orderOutsideDiameterStats, // row 3
+            orderFlatCrushStats, // row 4
+            orderH2OStats, // row 5
+          ];
+
+          const ctrlPlaceholderRows = [1, 2, 3, 4, 5]; // body rows
           ctrlPlaceholderRows.forEach((r) => {
+            const toUse = ctrlStatsMap[r];
             const y = ctrlTableY + r * ctrlRowHeight + 16;
-            doc.text("***", ctrlCenter2, y, { align: "center" });
-            doc.text("***", ctrlCenter3, y, { align: "center" });
-            doc.text("***", ctrlCenter4, y, { align: "center" });
-            doc.text("***", ctrlCenter5, y, { align: "center" });
+
+            if (toUse) {
+              doc.text(toUse.mean?.toString() || "", ctrlCenter2, y, {
+                align: "center",
+              });
+              doc.text(toUse.min?.toString() || "", ctrlCenter3, y, {
+                align: "center",
+              });
+              doc.text(toUse.max?.toString() || "", ctrlCenter4, y, {
+                align: "center",
+              });
+              doc.text(toUse.stdDev?.toString() || "", ctrlCenter5, y, {
+                align: "center",
+              });
+            }
           });
 
           // Horizontal line separator with dark blue color
@@ -587,20 +780,20 @@ export default function DownloadOrderListView({
           const fColX2 = fColX1 + footerColWidth;
           const fColX3 = fColX2 + footerColWidth;
 
-          doc.setFont("times new roman", "italic");
+          doc.setFont("times", "italic");
           doc.setFontSize(10);
 
           // First column content
           doc.text("Datum / Date", fColX1 + 8, footerTableY + 15);
 
-          doc.setFont("times new roman", "bolditalic");
+          doc.setFont("times", "bolditalic");
           doc.text(
             `${current_date}`,
             fColX1 + 8,
             footerTableY + footerRowHeight + 15
           );
 
-          doc.setFont("times new roman", "italic");
+          doc.setFont("times", "italic");
           // Second column content
           doc.text(`${customer}`, fColX2 + 8, footerTableY + 15, {
             align: "center",
@@ -613,7 +806,7 @@ export default function DownloadOrderListView({
           );
 
           // Third column merged content
-          doc.setFont("times new roman", "bold");
+          doc.setFont("times", "bold");
           doc.text(
             "Document synthese",
             fColX3 + footerColWidth / 2,
@@ -628,82 +821,79 @@ export default function DownloadOrderListView({
           const lengthData: chartData[] = measurementData // use the length data in the measurements table of the order ID
             .map((lengthInstance: any) => ({
               data: lengthInstance["length"],
-              id: lengthInstance["id"],
-            }))
-            .sort((a: chartData, b: chartData) => a.id - b.id); // sort ascendingly
+              palette_count: Number(lengthInstance["pallete_count"]),
+            }));
+
+          console.log("length data: ", lengthData);
 
           const lengthLineChartImage = await generateLineChartImage(
             canvasRef.current!,
-            lengthData
-          );
+            lengthData,
+            orderLengthStats["mean"]
+          ).then();
 
-          console.log(`length data to plot for order ${orderNo}: `, lengthData);
+          // console.log(`length data to plot for order ${orderNo}: `, lengthData);
 
           // INSIDE DATA
           const insideData: chartData[] = measurementData // use the inside diameter data in the measurements table of the order ID
             .map((insideInstance: any) => ({
               data: insideInstance["inside_diameter"],
-              id: insideInstance["id"],
-            }))
-            .sort((a: chartData, b: chartData) => a.id - b.id);
+              palette_count: Number(insideInstance["pallete_count"]),
+            }));
 
           const insideLineChartImage = await generateLineChartImage(
             canvasRef.current!,
-            insideData
-          );
+            insideData,
+            orderInsideDiameterStats["mean"]
+          ).then();
 
-          console.log(`inside data to plot for order ${orderNo}: `, insideData);
+          // console.log(`inside data to plot for order ${orderNo}: `, insideData);
 
           // OUTSIDE DATA
           const outsideData: chartData[] = measurementData // use the outside diameter data in the measurements table of the order ID
             .map((outsideInstance: any) => ({
               data: outsideInstance["outside_diameter"],
-              id: outsideInstance["id"],
-            }))
-            .sort((a: chartData, b: chartData) => a.id - b.id);
+              palette_count: Number(outsideInstance["pallete_count"]),
+            }));
 
           const outsideLineChartImage = await generateLineChartImage(
             canvasRef.current!,
-            outsideData
+            outsideData,
+            orderOutsideDiameterStats["mean"]
           ).then();
-
-          console.log(
-            `outside data to plot for order ${orderNo}: `,
-            outsideData
-          );
 
           // FLAT CRUSH DATA
           const flatCrushData: chartData[] = measurementData // use the flat crush data in the measurements table of the order ID
             .map((flatCrushInstance: any) => ({
               data: flatCrushInstance["flat_crush"],
-              id: flatCrushInstance["id"],
-            }))
-            .sort((a: chartData, b: chartData) => a.id - b.id);
+              palette_count: Number(flatCrushInstance["pallete_count"]),
+            }));
 
           const flatCrushLineChartImage = await generateLineChartImage(
             canvasRef.current!,
-            flatCrushData
+            flatCrushData,
+            orderFlatCrushStats["mean"]
           );
 
-          console.log(
-            `flat crush data to plot for order ${orderNo}: `,
-            flatCrushData
-          );
+          // console.log(
+          //   `flat crush data to plot for order ${orderNo}: `,
+          //   flatCrushData
+          // );
 
           // H2O DATA
           const h2oData: chartData[] = measurementData // use the h2O data in the measurements table of the order ID
             .map((h2oInstance: any) => ({
               data: h2oInstance["h20"],
-              id: h2oInstance["id"],
-            }))
-            .sort((a: chartData, b: chartData) => a.id - b.id);
+              palette_count: Number(h2oInstance["pallete_count"]),
+            }));
 
           const h2oLineChartImage = await generateLineChartImage(
             canvasRef.current!,
-            h2oData
+            h2oData,
+            orderH2OStats["mean"]
           );
 
-          console.log(`H2O data to plot for order ${orderNo}: `, flatCrushData);
+          // console.log(`H2O data to plot for order ${orderNo}: `, flatCrushData);
 
           // Try to load logo from public path and place it on the PDF
           try {
@@ -865,85 +1055,6 @@ export default function DownloadOrderListView({
       setButtonLabel("Download");
     }
   };
-
-  async function generateLineChartImage(
-    canvas: HTMLCanvasElement,
-    data: chartData[]
-  ) {
-    // Destroy old instance if it exists
-    if (canvas && Chart.getChart(canvas)) {
-      Chart.getChart(canvas)?.destroy();
-    }
-
-    const ctx = canvas.getContext("2d")!;
-    const labels = data.map((d) => String(d.id));
-    const values = data.map((d) => d.data);
-
-    const minVal = Math.min(...values);
-    const maxVal = Math.max(...values);
-    const padding = (maxVal - minVal) * 0.1; // 10% headroom
-    const chart = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels, // your x values
-        datasets: [
-          {
-            data: values, // your y values
-            borderColor: "rgba(29, 78, 216, 1)",
-            backgroundColor: "rgba(29, 78, 216, 0.2)",
-            borderWidth: 2,
-            tension: 0.3,
-            fill: true,
-            pointRadius: 1,
-            pointHoverRadius: 3,
-          },
-        ],
-      },
-      options: {
-        responsive: false,
-        animation: false,
-        plugins: {
-          legend: { display: false },
-          datalabels: {
-            align: (ctx) => (ctx.dataIndex % 2 === 0 ? "top" : "bottom"), // position above point
-            anchor: "center", // attach to the point
-            font: {
-              size: 8,
-            },
-            offset: -1,
-            formatter: (value: number) =>
-              value.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              }), // show formatted labels too
-          },
-        },
-        scales: {
-          y: {
-            ticks: {
-              stepSize: 5,
-              callback: (value) =>
-                Number(value).toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                }), // 1,234.56 style
-            },
-            min: minVal - padding,
-            max: maxVal + padding,
-          },
-          x: {
-            ticks: {
-              callback: (value, index) => labels[index],
-            },
-          },
-        },
-      },
-    });
-
-    const imageUrl = canvas.toDataURL("image/png");
-    chart.destroy(); // free up the canvas for reuse
-    return imageUrl;
-  }
 
   return (
     <div>
