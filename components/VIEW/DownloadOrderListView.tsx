@@ -22,7 +22,7 @@ import {
   DrawMainHeader,
   DrawRightHeader,
   DrawMeasurementTables,
-  WriteH2OItalic
+  WriteH2OItalic,
 } from "./PDFBuilder";
 
 // necessary packages for exporting zip files
@@ -352,11 +352,6 @@ export default function DownloadOrderListView({
             get(order.id) as unknown as number
           );
 
-          console.log(
-            `measurement data for order no ${orderNo}: `,
-            measurementData
-          );
-
           // fetch customer specifications data
           const customerSpecificationsData =
             await GetCustomerSpecificationsData(
@@ -364,12 +359,6 @@ export default function DownloadOrderListView({
               get(order.tbl_article?.article_min) as unknown as number,
               get(order.tbl_article?.article_max) as unknown as number
             );
-
-          console.log("order data: ", order);
-          console.log(
-            "Customer Specifications data: ",
-            customerSpecificationsData
-          );
 
           // customer specifications data
           const nominal_data = customerSpecificationsData[0];
@@ -391,8 +380,6 @@ export default function DownloadOrderListView({
             "flat_crush"
           );
           const orderH2OStats = calculateStats(measurementData, "h20");
-
-          // console.log("length mean: ", orderLengthStats["mean"])
 
           // format delivery date and time
           const deliveryDate = get(order.exit_date_time);
@@ -576,8 +563,10 @@ export default function DownloadOrderListView({
             "Innen (mm) / Interieur (mm) / Inside (mm)",
             "Aussen (mm) / exterieur (mm) / Outside (mm)",
             "Flat Crush (kN/m)",
-            "H20 (%)",
+            "",
           ];
+
+          WriteH2OItalic(doc, margin + 8, specTableY + 5 * rowHeight + 16);
 
           // Fill first column
           for (let r = 0; r < rows; r++) {
@@ -686,7 +675,20 @@ export default function DownloadOrderListView({
           // Column headers (row 1) — first column blank
           doc.setFont("Helvetica-BoldOblique");
           doc.getFontList();
-          doc.text("x̄", ctrlCenter2, ctrlTableY + 16, { align: "center" });
+          try {
+            const logo = new Image();
+            logo.src = "/Img/xBar.png";
+            await logo.decode();
+            doc.addImage(
+              logo as HTMLImageElement,
+              "PNG",
+              ctrlCenter2,
+              ctrlTableY + 4,
+              16,
+              16
+            );
+          } catch {}
+
           doc.setFont("times", "bolditalic");
           doc.text("Min (X)", ctrlCenter3, ctrlTableY + 16, {
             align: "center",
@@ -695,7 +697,36 @@ export default function DownloadOrderListView({
             align: "center",
           });
           doc.setFont("symbol", "italic");
-          doc.text("σ(X)", ctrlCenter5, ctrlTableY + 16, { align: "center" });
+
+          try {
+            const logo = new Image();
+            logo.src = "/Img/stdV.png";
+            await logo.decode();
+            doc.addImage(
+              logo as HTMLImageElement,
+              "PNG",
+              ctrlCenter5 - 28,
+              ctrlTableY - 7,
+              40,
+              40
+            );
+          } catch {}
+
+          try {
+            const logo = new Image();
+            logo.src = "/Img/xBar.png";
+            await logo.decode();
+            doc.addImage(
+              logo as HTMLImageElement,
+              "PNG",
+              ctrlCenter5 - 4,
+              ctrlTableY + 4,
+              16,
+              16
+            );
+          } catch {}
+
+          doc.text("", ctrlCenter5, ctrlTableY + 16, { align: "center" });
 
           // Restore normal style for body rows
           doc.setFont("times", "italic");
@@ -707,7 +738,7 @@ export default function DownloadOrderListView({
             "Innen (mm) / Interieur (mm) / Inside (mm)",
             "Aussen (mm) / exterieur (mm) / Outside (mm)",
             "Flat Crush (kN/m)",
-            "H20 (%)",
+            "",
           ];
 
           // Fill first column
@@ -716,17 +747,7 @@ export default function DownloadOrderListView({
             doc.text(ctrlCol1Labels[r], margin + 8, y);
           }
 
-          WriteH2OItalic(doc, margin + 8, ctrlTableY + 5 * ctrlRowHeight + 16)
-          
-          // Fill placeholder values *** for columns 2-5, rows 2-6
-          const statKeys = [
-            null, // row 1 blank
-            "orderLengthStats",
-            "orderInsideDiameterStats",
-            "orderOutsideDiameterStats",
-            "orderFlatCrushStats",
-            "orderH2OStats",
-          ];
+          WriteH2OItalic(doc, margin + 8, ctrlTableY + 5 * ctrlRowHeight + 16);
 
           // Map row index to corresponding stats object
           const ctrlStatsMap = [
@@ -824,15 +845,11 @@ export default function DownloadOrderListView({
               palette_count: Number(lengthInstance["pallete_count"]),
             }));
 
-          console.log("length data: ", lengthData);
-
           const lengthLineChartImage = await generateLineChartImage(
             canvasRef.current!,
             lengthData,
             orderLengthStats["mean"]
           ).then();
-
-          // console.log(`length data to plot for order ${orderNo}: `, lengthData);
 
           // INSIDE DATA
           const insideData: chartData[] = measurementData // use the inside diameter data in the measurements table of the order ID
@@ -846,8 +863,6 @@ export default function DownloadOrderListView({
             insideData,
             orderInsideDiameterStats["mean"]
           ).then();
-
-          // console.log(`inside data to plot for order ${orderNo}: `, insideData);
 
           // OUTSIDE DATA
           const outsideData: chartData[] = measurementData // use the outside diameter data in the measurements table of the order ID
@@ -875,11 +890,6 @@ export default function DownloadOrderListView({
             orderFlatCrushStats["mean"]
           );
 
-          // console.log(
-          //   `flat crush data to plot for order ${orderNo}: `,
-          //   flatCrushData
-          // );
-
           // H2O DATA
           const h2oData: chartData[] = measurementData // use the h2O data in the measurements table of the order ID
             .map((h2oInstance: any) => ({
@@ -892,8 +902,6 @@ export default function DownloadOrderListView({
             h2oData,
             orderH2OStats["mean"]
           );
-
-          // console.log(`H2O data to plot for order ${orderNo}: `, flatCrushData);
 
           // Try to load logo from public path and place it on the PDF
           try {
@@ -973,7 +981,14 @@ export default function DownloadOrderListView({
           DrawHorizontalLine(doc, margin, 130);
 
           // Draw the tables in page 03
-          DrawMeasurementTables(doc, margin, measurementData);
+          DrawMeasurementTables(
+            doc,
+            180,
+            measurementData,
+            company_name,
+            orderNo,
+            current_date
+          );
 
           // Horizontal line for footer
           DrawHorizontalLine(doc, margin, 720);
@@ -995,7 +1010,6 @@ export default function DownloadOrderListView({
         // more than 1 file to download - create zip
         const zip = new JSZip();
         mode = "download";
-        console.log("pdfs for zipping: ", pdfs);
 
         pdfs.forEach(({ doc, filename }) => {
           const pdfBlob = doc.output("blob");
@@ -1018,7 +1032,6 @@ export default function DownloadOrderListView({
           onPDFGenerated?.(pdfBlob);
           mode === "preview";
           const url = URL.createObjectURL(pdfBlob);
-          console.log("[DownloadOrderListView] Preview Blob URL:", url);
           (window as any).__lastPdfUrl = url; // Access from DevTools: window.__lastPdfUrl
           window.open(url);
           toast.success("PDF generated for preview");
@@ -1033,7 +1046,6 @@ export default function DownloadOrderListView({
         } else {
           onPDFGenerated?.(pdfBlob);
           const url = URL.createObjectURL(pdfBlob);
-          console.log("[DownloadOrderListView] Preview Blob URL:", url);
           (window as any).__lastPdfUrl = url; // Access from DevTools: window.__lastPdfUrl
           window.open(url);
           const a = document.createElement("a");

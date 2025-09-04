@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
-import { autoTable } from "jspdf-autotable";
+import autoTable, { RowInput } from "jspdf-autotable";
+
 /**
  * Draws a page header with centered text
  */
@@ -124,23 +125,6 @@ export function DrawGraphLabel(
 
   let label: string[] = [];
 
-  // // image original size (from canvas)
-  // const imgProps = doc.getImageProperties(chartImage);
-  // const imgWidth = imgProps.width;
-  // const imgHeight = imgProps.height;
-
-  // // maintain aspect ratio
-  // const ratio = imgWidth / imgHeight;
-
-  // // scale down while keeping aspect ratio
-  // let renderWidth = chart_width;
-  // let renderHeight = renderWidth / ratio;
-
-  // if (renderHeight > chart_height) {
-  //   renderHeight = chart_height;
-  //   renderWidth = renderHeight * ratio;
-  // }
-
   switch (section) {
     case "length":
       label = ["Länge", "Longueur", "Length", "mm"];
@@ -165,7 +149,7 @@ export function DrawGraphLabel(
     case "h2o":
       label_y_pos = margin + 610;
       chart_y_pos = margin + 590;
-      WriteH2OBold(doc, label_x_pos, label_y_pos)
+      WriteH2OBold(doc, label_x_pos, label_y_pos);
       break;
   }
 
@@ -223,11 +207,11 @@ export function WriteH2OBold(doc: jsPDF, x: number, y: number) {
 
   // Write "2" smaller and lower (subscript)
   doc.setFontSize(8);
-  doc.text("2", x + 8, y + 2); // adjust x,y offset as needed
+  doc.text("2", x + 9, y + 2); // adjust x,y offset as needed
 
   // Back to normal for "O"
   doc.setFontSize(12);
-  doc.text("O", x + 11, y);
+  doc.text("O", x + 13, y);
 }
 
 export function WriteH2OItalic(doc: jsPDF, x: number, y: number) {
@@ -239,118 +223,366 @@ export function WriteH2OItalic(doc: jsPDF, x: number, y: number) {
 
   // Write "2" smaller and lower (subscript)
   doc.setFontSize(8);
-  doc.text("2", x + 8, y + 2); // adjust x,y offset as needed
+  doc.text("2", x + 7, y + 2); // adjust x,y offset as needed
 
   // Back to normal for "O"
   doc.setFontSize(12);
-  doc.text("O", x + 11, y);
+  doc.text("O (%)", x + 11, y);
 }
 
+type TableHead = string[][];
+type TableBody = RowInput[];
+
+/**
+ * Draws two related tables starting page 3:
+ * - Measurements: two-column, left then right, then new page
+ * - FlatCrush/H2O: goes in the right column if available; else full-width below Measurements
+ */
 export function DrawMeasurementTables(
   doc: jsPDF,
-  margin: number = 40,
-  measurementData: any[]
+  marginTopStartPage3: number = 180, // header-safe top margin on pages >= 3
+  measurementData: any[],
+  company_name: string = "",
+  orderNo: string = "",
+  current_date: string = ""
 ) {
-  const measurementsHead = [
+  // ---------- Build table heads & bodies ----------
+  const measurementsHead: TableHead = [
     ["Pal Nr", "L (mm)", "Ø in (mm)", "Ø out (mm)", "OK"],
   ];
-  const flatCrushH2oHead = [["Flat Crush (kN / dm)", "H2O (%)"]];
-  const measurementsBody: any[][] = [];
-  const flatCrushH2oBody: any[][] = [];
+  const flatCrushH2oHead: TableHead = [["Flat Crush (kN/dm)", "H₂O (%)"]];
+  const measurementsBody: TableBody = [];
+  const flatCrushH2oBody: TableBody = [];
 
-  measurementData.map((data: any, index) => {
-    let pallete_count = data["pallete_count"];
-    let length = data["length"];
-    let inside_diameter = data["inside_diameter"];
-    let outside_diameter = data["outside_diameter"];
-    let ok_value = "";
-
-    // Skip pushing row if pallete_count is missing/0/null
-    if (!pallete_count || pallete_count === 0) {
-      return;
-    }
-
-    if (length === 0 || length === null) {
-      length = "";
-    }
-
-    if (inside_diameter === 0 || inside_diameter === null) {
-      inside_diameter = "";
-    }
-
-    if (outside_diameter === 0 || outside_diameter === null) {
-      outside_diameter = "";
-    }
-
+  // Measurements body
+  for (const data of measurementData) {
+    const pal = data["pallete_count"];
+    if (!pal) continue; // skip empty pallets
     measurementsBody.push([
-      pallete_count,
-      length,
-      inside_diameter,
-      outside_diameter,
-      ok_value,
+      pal,
+      data["length"] || "",
+      data["inside_diameter"] || "",
+      data["outside_diameter"] || "",
+      "", // OK column (blank)
     ]);
-  });
+  }
 
-  measurementData.forEach((data: any, index) => {
-    const flat_crush = data["flat_crush"];
+  // FlatCrush/H2O body (include row if either value exists)
+  for (const data of measurementData) {
+    const fc = data["flat_crush"];
     const h2o = data["h20"];
+    if (fc || h2o) flatCrushH2oBody.push([fc || "", h2o || ""]);
+  }
 
-    // Only push if both values are nonzero and not null
-    if (flat_crush || h2o) {
-      flatCrushH2oBody.push([
-        flat_crush || "", // fallback to empty string if missing
-        h2o || "",
-      ]);
+  // ---------- Page & layout constants ----------
+  ensurePage(doc, 3);
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+
+  // Content margins (top avoids your header; bottom avoids footer)
+  const contentTop = marginTopStartPage3;
+  const contentBottom = 100; // adjust to your footer area if needed
+
+  const sideLeft = 40;
+  const sideRight = 40;
+  const gap = 10;
+
+  const printableW = pageW - (sideLeft + sideRight);
+  const colW = (printableW - gap) / 2;
+
+  // --------- Estimate rows per column and chunk MEASUREMENTS ---------
+  const rowsPerColumn = estimateRowsPerColumn(
+    doc,
+    pageH,
+    { top: contentTop, bottom: contentBottom },
+    measurementsHead,
+    10 // font size used in styles
+  );
+  const measurementChunks = chunkRows(measurementsBody, rowsPerColumn);
+
+  // --------- Render MEASUREMENTS as a two-column flow ---------
+  let currentPage = 3;
+  let onLeftColumn = true; // left → right → next page
+  let lastFinalY = contentTop;
+
+  for (let i = 0; i < measurementChunks.length; i++) {
+    const colLeft = onLeftColumn ? sideLeft : sideLeft + colW + gap;
+
+    // Ensure the target page exists and is active
+    if (currentPage > doc.internal.getNumberOfPages()) doc.addPage();
+    doc.setPage(currentPage);
+
+    // Right header text
+    DrawRightHeader(doc, "AQ 30", 3, 40);
+
+    // Main header text
+    DrawMainHeader(doc, company_name, 40, 3);
+
+    // Horizontal line below headers
+    DrawHorizontalLine(doc, 40, 130);
+
+    // Draw Footer
+    DrawFooter(
+      doc,
+      40, // used to map x position
+      orderNo,
+      current_date
+    );
+
+    autoTable(doc, {
+      head: i === 0 ? measurementsHead : [], // show head only on first chunk
+      body: measurementChunks[i],
+      startY: contentTop, // always start at top of content area for column chunks
+      tableWidth: colW,
+      margin: {
+        top: contentTop,
+        bottom: contentBottom,
+        left: colLeft,
+        right: sideRight,
+      },
+      theme: "grid",
+      rowPageBreak: "auto",
+      styles: {
+        font: "times",
+        fontSize: 10,
+        halign: "center",
+        valign: "middle",
+        cellWidth: "wrap",
+      },
+      headStyles: {
+        fontStyle: "bolditalic",
+        fontSize: 10,
+        halign: "center",
+        fillColor: false,
+        textColor: "black",
+      },
+    });
+
+    const at = (doc as any).lastAutoTable;
+    lastFinalY = at.finalY;
+
+    // Move to the next column, or next page
+    if (onLeftColumn) {
+      onLeftColumn = false; // next is right column, same page
+    } else {
+      onLeftColumn = true; // back to left column, next page
+      currentPage++;
     }
-  });
+  }
 
-  autoTable(doc, {
-    margin: margin + 30,
-    startY: 180, // where the table starts on the Y axis
-    head: measurementsHead, // table headers
-    body: measurementsBody, // table rows
-    theme: "grid", // can be 'striped', 'grid', or 'plain'
-    tableWidth: "wrap",
-    pageBreak: "avoid",
-    styles: {
-      fontSize: 10,
-      halign: "center",
-      valign: "middle",
-      font: "times",
-      cellWidth: "wrap",
-      lineWidth: 1,
-      lineColor: "black",
-    },
-    headStyles: {
-      fontStyle: "bolditalic",
-      cellWidth: "wrap",
-      halign: "center",
-      fillColor: false,
-      textColor: "black",
-    },
-    bodyStyles: {
-      fontSize: 10,
-      halign: "center",
-      valign: "middle",
-      font: "times",
-      cellWidth: "wrap",
-    },
-  });
+  // Nothing else to draw
+  if (flatCrushH2oBody.length === 0) return;
 
-  autoTable(doc, {
-    margin: margin * 2 + 250,
-    startY: 180, // where the table starts on the Y axis
-    head: flatCrushH2oHead, // table headers
-    body: flatCrushH2oBody, // table rows
-    theme: "grid", // can be 'striped', 'grid', or 'plain'
-    tableWidth: "wrap",
-    headStyles: {
-      fontStyle: "bolditalic",
-      halign: "center",
-      fillColor: false,
-      textColor: "black",
-      lineColor: "black",
-      lineWidth: 1,
-    },
-  });
+  // --------- Render FLAT CRUSH / H2O based on remaining space ---------
+  if (onLeftColumn === false) {
+    // We ended the last Measurements chunk in the LEFT column,
+    // so the RIGHT column on the current page is still free.
+    const colLeft = sideLeft + colW + gap;
+
+    if (currentPage > doc.internal.getNumberOfPages()) doc.addPage();
+    doc.setPage(currentPage);
+
+    // Right header text
+    DrawRightHeader(doc, "AQ 30", 3, 40);
+
+    // Main header text
+    DrawMainHeader(doc, company_name, 40, 3);
+
+    // Horizontal line below headers
+    DrawHorizontalLine(doc, 40, 130);
+
+    // Draw Footer
+    DrawFooter(
+      doc,
+      40, // used to map x position
+      orderNo,
+      current_date
+    );
+
+    autoTable(doc, {
+      head: flatCrushH2oHead,
+      body: flatCrushH2oBody,
+      startY: contentTop, // top of the content area
+      tableWidth: colW,
+      margin: {
+        top: contentTop,
+        bottom: contentBottom,
+        left: colLeft,
+        right: sideRight,
+      },
+      theme: "grid",
+      styles: {
+        font: "times",
+        fontSize: 10,
+        halign: "center",
+        valign: "middle",
+        cellWidth: "wrap",
+      },
+      headStyles: {
+        fontStyle: "bolditalic",
+        fontSize: 10,
+        halign: "center",
+        fillColor: false,
+        textColor: "black",
+      },
+    });
+  } else {
+    // Either we ended in the RIGHT column (so both columns used),
+    // or exactly consumed the page. Place FlatCrush/H2O FULL-WIDTH
+    // directly below Measurements if there's room; else go to next page.
+    const neededTop = Math.max(lastFinalY + 8, contentTop);
+    const minRow = estimateRowHeight(doc, 10);
+    const headH = estimateHeadHeight(doc, 10);
+    const remaining = pageH - contentBottom - neededTop;
+
+    if (remaining < headH + minRow) {
+      // Not enough space; add a new page and start at contentTop
+
+      currentPage++;
+      if (currentPage > doc.internal.getNumberOfPages()) doc.addPage();
+      doc.setPage(currentPage);
+
+      // Right header text
+      DrawRightHeader(doc, "AQ 30", 3, 40);
+
+      // Main header text
+      DrawMainHeader(doc, company_name, 40, 3);
+
+      // Horizontal line below headers
+      DrawHorizontalLine(doc, 40, 130);
+
+      // Draw Footer
+      DrawFooter(
+        doc,
+        40, // used to map x position
+        orderNo,
+        current_date
+      );
+
+      autoTable(doc, {
+        head: flatCrushH2oHead,
+        body: flatCrushH2oBody,
+        startY: contentTop,
+        tableWidth: printableW,
+        margin: {
+          top: contentTop,
+          bottom: contentBottom,
+          left: sideLeft,
+          right: sideRight,
+        },
+        theme: "grid",
+        styles: {
+          font: "times",
+          fontSize: 10,
+          halign: "center",
+          valign: "middle",
+          cellWidth: "wrap",
+        },
+        headStyles: {
+          fontStyle: "bolditalic",
+          fontSize: 10,
+          halign: "center",
+          fillColor: false,
+          textColor: "black",
+        },
+      });
+    } else {
+      // Same page, full-width directly below the Measurements table
+      if (currentPage > doc.internal.getNumberOfPages()) doc.addPage();
+      doc.setPage(currentPage);
+
+      // Right header text
+      DrawRightHeader(doc, "AQ 30", 3, 40);
+
+      // Main header text
+      DrawMainHeader(doc, company_name, 40, 3);
+
+      // Horizontal line below headers
+      DrawHorizontalLine(doc, 40, 130);
+
+      // Draw Footer
+      DrawFooter(
+        doc,
+        40, // used to map x position
+        orderNo,
+        current_date
+      );
+      autoTable(doc, {
+        head: flatCrushH2oHead,
+        body: flatCrushH2oBody,
+        startY: neededTop,
+        tableWidth: printableW,
+        margin: {
+          top: contentTop,
+          bottom: contentBottom,
+          left: sideLeft,
+          right: sideRight,
+        },
+        theme: "grid",
+        styles: {
+          font: "times",
+          fontSize: 10,
+          halign: "center",
+          valign: "middle",
+          cellWidth: "wrap",
+        },
+        headStyles: {
+          fontStyle: "bolditalic",
+          fontSize: 10,
+          halign: "center",
+          fillColor: false,
+          textColor: "black",
+        },
+      });
+    }
+  }
+}
+
+/* ---------- Helpers ---------- */
+
+/** Ensure at least N pages exist; set current page to N. */
+function ensurePage(doc: jsPDF, pageNumber: number) {
+  const have = doc.internal.getNumberOfPages();
+  for (let i = have; i < pageNumber; i++) doc.addPage();
+  doc.setPage(pageNumber);
+}
+
+/** Conservative single-line row height estimation used for chunking. */
+function estimateRowHeight(doc: jsPDF, fontSize: number) {
+  const prev = doc.getFontSize();
+  doc.setFontSize(fontSize);
+  const h = doc.getTextDimensions("Ag").h;
+  doc.setFontSize(prev);
+  // Add padding + line/border breathing room
+  return h * 1.15 + 7;
+}
+
+/** Header height estimate for a single header row. */
+function estimateHeadHeight(doc: jsPDF, fontSize: number) {
+  const prev = doc.getFontSize();
+  doc.setFontSize(fontSize);
+  const h = doc.getTextDimensions("Ag").h;
+  doc.setFontSize(prev);
+  return h * 1.2 + 8;
+}
+
+/** How many rows fit in one column (considering header & margins). */
+function estimateRowsPerColumn(
+  doc: jsPDF,
+  pageH: number,
+  margin: { top: number; bottom: number },
+  head: TableHead,
+  fontSize: number
+) {
+  const contentH = pageH - margin.top - margin.bottom;
+  const headH = estimateHeadHeight(doc, fontSize);
+  const rowH = estimateRowHeight(doc, fontSize);
+  return Math.max(1, Math.floor((contentH - headH) / rowH));
+}
+
+/** Split rows into equal-sized chunks (for left/right column paging). */
+function chunkRows<T>(rows: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < rows.length; i += size) out.push(rows.slice(i, i + size));
+  return out;
 }
