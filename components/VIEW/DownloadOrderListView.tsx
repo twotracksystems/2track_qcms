@@ -313,6 +313,10 @@ export default function DownloadOrderListView({
       return;
     }
     try {
+      // Open a blank tab synchronously if previewing to avoid popup blockers
+      const shouldPreview = mode !== "download";
+      const previewWindow = shouldPreview ? window.open("", "_blank") : null;
+
       const pdfs: any[] = [];
       setButtonLabel("Downloading..."); // inform user that doc is downloading
       setIsDisabled(true); // disables button during downloading
@@ -1024,22 +1028,30 @@ export default function DownloadOrderListView({
       } else {
         // isa lang ka file ang idownload or preview
         // Generate PDF blob for preview
-        const { doc, fileName } = pdfs[0];
+        const { doc, filename } = pdfs[0];
         const pdfBlob = doc.output("blob");
 
         // Handle different modes
         if (mode === "preview") {
           onPDFGenerated?.(pdfBlob);
-          mode === "preview";
           const url = URL.createObjectURL(pdfBlob);
           (window as any).__lastPdfUrl = url; // Access from DevTools: window.__lastPdfUrl
-          window.open(url);
+          if (previewWindow) {
+            try {
+              previewWindow.location.assign(url);
+            } catch (_) {
+              window.open(url, "_blank");
+            }
+          } else {
+            window.open(url, "_blank");
+          }
           toast.success("PDF generated for preview");
           setIsDisabled(false);
           setButtonLabel("Download");
           return;
         } else if (mode === "download") {
-          doc.save(fileName);
+          // Prefer the generated filename, fallback to prop
+          doc.save(filename || fileName);
           toast.success("PDF downloaded");
           setIsDisabled(false);
           setButtonLabel("Download");
@@ -1047,10 +1059,18 @@ export default function DownloadOrderListView({
           onPDFGenerated?.(pdfBlob);
           const url = URL.createObjectURL(pdfBlob);
           (window as any).__lastPdfUrl = url; // Access from DevTools: window.__lastPdfUrl
-          window.open(url);
+          if (previewWindow) {
+            try {
+              previewWindow.location.assign(url);
+            } catch (_) {
+              window.open(url, "_blank");
+            }
+          } else {
+            window.open(url, "_blank");
+          }
           const a = document.createElement("a");
           a.href = url;
-          a.download = fileName || pdfs[0]["filename"]; // Use the pdf's fileName
+          a.download = filename || fileName || pdfs[0]["filename"]; // Use the pdf's filename
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
