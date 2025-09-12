@@ -47,7 +47,7 @@ export default function LaboratoryListView() {
           <li>  
             <span>Laboratory Management</span>
           </li>
-        </ul>
+        </ul> 
       </div>
       <div className="w-11/12 flex flex-col mx-auto gap-y-12 h-full">
         <div className="w-full flex flex-row  justify-between items-center">

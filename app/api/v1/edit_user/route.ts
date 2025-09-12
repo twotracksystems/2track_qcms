@@ -77,6 +77,24 @@ export async function PUT(req: NextRequest) {
         { status: 500 }
       );
     }
+    // const { error:Metaerror } = await supabase.auth.updateUser({
+    //   data: {
+    //     first_name: 'April Jude',
+    //     last_name: 'Provido',
+    //     email: 'apriljude.thedreamteam@gmail.com',
+    //     full_name: `April Jude Provido`,
+    //     uuid: 'f9d7b875-bb99-4eb8-8ebe-9e436caa2abb',
+        
+    //   }
+    // })
+    // if (Metaerror) {
+    //   console.error("Supabase Update Error:", Metaerror);
+    //   return NextResponse.json(
+    //     { error: `Database update failed: ${Metaerror.message}` },
+    //     { status: 500 }
+    //   );
+    // }
+
 
     // Optional: Update Auth if password is provided
     // if (password) {

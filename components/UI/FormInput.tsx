@@ -1,6 +1,6 @@
 "use client";
 
-import { Field } from "formik";
+import { Field, useField, useFormikContext } from "formik";
 import { CircleHelp } from "lucide-react";
 
 export function FormInput({
@@ -232,3 +232,65 @@ export function FormSelect({
     </div>
   );
 }
+
+import Select from "react-select";
+
+export function FormSearchableSelect({
+  errors,
+  touched,
+  tooltip,
+  name,
+  placeholder,
+  label,
+  readonly,
+  options,
+}: {
+  errors: string | undefined;
+  touched: string | undefined;
+  tooltip: string;
+  name: string;
+  placeholder: string;
+  label: string;
+  readonly?: boolean;
+  options: { value: string; label: string }[];
+}) {
+  const [field, , helpers] = useField(name);
+  const { setFieldValue } = useFormikContext();
+
+  return (
+    <div className="w-11/12 block ml-4">
+      <label className="form-control w-auto max-w-lg">
+        <div className="label">
+          <span className="label-text font-bold gap-x-2 flex flex-row">
+            {label}
+            <span className="tooltip tooltip-right" data-tip={tooltip}>
+              <CircleHelp className="my-auto" size={20} strokeWidth={0.75} />
+            </span>
+          </span>
+        </div>
+
+        <Select
+          name={name}
+          className="text-lg  bg-white select-bordered mx-auto w-full max-w-md"
+          value={options.find((option) => option.value === field.value) || null}
+          onChange={(selectedOption) =>
+            setFieldValue(name, selectedOption ? selectedOption.value : "")
+          }
+          options={options}
+          placeholder={placeholder}
+          isDisabled={readonly}
+          classNamePrefix="react-select"
+        />
+      </label>
+
+      {errors && touched ? (
+        <span className="text-error flex flex-row">{errors}</span>
+      ) : (
+        <span className="text-error invisible flex flex-row">Error</span>
+      )}
+    </div>
+  );
+}
+
+
+

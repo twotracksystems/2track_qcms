@@ -6,6 +6,7 @@ import { createClient } from "@/utils/supabase/client";
 import { QueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
+import Select from "react-select";
 import toast from "react-hot-toast";
 import { Pencil, Trash2 } from "lucide-react";
 import * as Yup from "yup";
@@ -29,6 +30,7 @@ export default function EditArticleListCopy(params:any) {
   const [initialValues,setInitialValues] = useState({ 
     rows: [
       {
+        id_number: "",
         article_name: "",
         customer_id: "",
         LengthNominal: 0,
@@ -40,9 +42,9 @@ export default function EditArticleListCopy(params:any) {
         OutsideDiameterNominal: 0,
         OutsideDiameterMin: 0,
         OutsideDiameterMax: 0,
-        FlatCrushNominal: 0,
-        FlatCrushMin: 0,
-        FlatCrushMax: 0,
+        FlatCrushNominal: "0",
+        FlatCrushMin: "0",
+        FlatCrushMax: "0",
         H20Nominal: 0,
         H20Min: 0,
         H20Max: 0,
@@ -98,7 +100,7 @@ export default function EditArticleListCopy(params:any) {
         number_control: user.number_control,
         rows: prev.rows.map((row) => ({
           ...row,
-          article_name: user.article_name,
+          id_number: user.id_number,
           customer_id: user.customer_id,
           NumberControl: user.number_control,
         })),
@@ -124,21 +126,22 @@ export default function EditArticleListCopy(params:any) {
   });
   console.log("Gatherd data:", nominalData);
   useEffect(() => {
-    if (isNominalSuccess && nominalData?.length > 0) {
-      setInitialValues((prev) => ({
-        ...prev,
-        rows: prev.rows.map((row) => ({
-          ...row,
-          LengthNominal: nominalData[0].length,
-          InsideDiameterNominal: nominalData[0].inside_diameter,
-          OutsideDiameterNominal: nominalData[0].outside_diameter,
-          FlatCrushNominal: nominalData[0].flat_crush,
-          H20Nominal: nominalData[0].h20,
-          RadialNominal:nominalData[0].radial,
-        })),
-      }));
-    }
-  }, [isNominalSuccess, nominalData]);
+      if (isNominalSuccess && nominalData?.length > 0) {
+        setInitialValues((prev) => ({
+          ...prev,
+          rows: prev.rows.map((row) => ({
+            ...row,
+            LengthNominal: nominalData[0].length,
+            InsideDiameterNominal: nominalData[0].inside_diameter,
+            OutsideDiameterNominal: nominalData[0].outside_diameter,
+            // FlatCrushNominal: parseFloat(parseFloat(nominalData[0].flat_crush).toFixed(2)),
+            FlatCrushNominal: parseFloat(nominalData[0].flat_crush).toFixed(2),
+            H20Nominal: nominalData[0].h20,
+            RadialNominal: nominalData[0].radial,
+          })),
+        }));
+      }
+    }, [isNominalSuccess, nominalData]);
   
 
   const {
@@ -160,21 +163,22 @@ export default function EditArticleListCopy(params:any) {
   });
   console.log("Gatherd data:", minData);
   useEffect(() => {
-    if (isMinSuccess && minData?.length > 0) {
-      setInitialValues((prev) => ({
-        ...prev,
-        rows: prev.rows.map((row) => ({
-          ...row,
-          LengthMin: minData[0].length,
-          InsideDiameterMin: minData[0].inside_diameter,
-          OutsideDiameterMin: minData[0].outside_diameter,
-          FlatCrushMin: minData[0].flat_crush,
-          H20Min: minData[0].h20,
-          RadialMin:minData[0].radial,
-        })),
-      }));
-    }
-  }, [isMinSuccess, minData]);
+      if (isMinSuccess && minData?.length > 0) {
+        setInitialValues((prev) => ({
+          ...prev,
+          rows: prev.rows.map((row) => ({
+            ...row,
+            LengthMin: minData[0].length,
+            InsideDiameterMin: minData[0].inside_diameter,
+            OutsideDiameterMin: minData[0].outside_diameter,
+            // FlatCrushMin: Number(minData[0].flat_crush),
+            FlatCrushMin: parseFloat(minData[0].flat_crush).toFixed(2),
+            H20Min: minData[0].h20,
+            RadialMin: minData[0].radial,
+          })),
+        }));
+      }
+    }, [isMinSuccess, minData]);
 
   const {
     data: maxData,
@@ -195,21 +199,22 @@ export default function EditArticleListCopy(params:any) {
   });
   console.log("Gatherd data:", maxData);
   useEffect(() => {
-    if (isMaxSuccess && maxData?.length > 0) {
-      setInitialValues((prev) => ({
-        ...prev,
-        rows: prev.rows.map((row) => ({
-          ...row,
-          LengthMax: maxData[0].length,
-          InsideDiameterMax: maxData[0].inside_diameter,
-          OutsideDiameterMax: maxData[0].outside_diameter,
-          FlatCrushMax: maxData[0].flat_crush,
-          H20Max: maxData[0].h20,
-          RadialMax:maxData[0].radial,
-        })),
-      }));
-    }
-  }, [isMaxSuccess, maxData]);
+      if (isMaxSuccess && maxData?.length > 0) {
+        setInitialValues((prev) => ({
+          ...prev,
+          rows: prev.rows.map((row) => ({
+            ...row,
+            LengthMax: maxData[0].length,
+            InsideDiameterMax: maxData[0].inside_diameter,
+            OutsideDiameterMax: maxData[0].outside_diameter,
+            // FlatCrushMax: Number(maxData[0].flat_crush),
+            FlatCrushMax: parseFloat(maxData[0].flat_crush).toFixed(2),
+            H20Max: maxData[0].h20,
+            RadialMax: maxData[0].radial,
+          })),
+        }));
+      }
+    }, [isMaxSuccess, maxData]);
 
   const UpdateNominalMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -422,7 +427,7 @@ export default function EditArticleListCopy(params:any) {
         radial:row.RadialMax,
       }),
       UpdateArticleMutation.mutateAsync({
-        article_name: row.article_name,
+        id_number: row.id_number,
         customer_id: row.customer_id,
         number_control: row.NumberControl,
       }),
@@ -449,16 +454,16 @@ export default function EditArticleListCopy(params:any) {
                                           {values.rows.map((row, index) => (
                                             <div key={index} className="flex gap-4">
                                                  <div className="inline gap-2">
-                                                                        <label className="label">Product Name</label>
+                                                                        <label className="label">ID Number</label>
                                                                         <Field
-                                                                          name={`rows.${index}.article_name`}
+                                                                          name={`rows.${index}.id_number`}
                                                                           type="text"
-                                                                          placeholder="Enter Product Name"
+                                                                          placeholder="Enter ID Number"
                                                                         className={`input input-bordered
                                                                            ${
                                                     typeof errors.rows?.[index] === "object" &&
-                                                    errors.rows?.[index]?.article_name &&
-                                                    touched.rows?.[index]?.article_name
+                                                    errors.rows?.[index]?.id_number &&
+                                                    touched.rows?.[index]?.id_number
                                                       ? "border-red-500"
                                                       : ""
                                                   } 
@@ -471,7 +476,7 @@ export default function EditArticleListCopy(params:any) {
                                                                         </div>
                                            <div className="inline gap-2">
                                              <label className="label">Customer Name</label>
-                                             <Field
+                                             {/* <Field
                                                as="select"
                                                name={`rows.${index}.customer_id`}
                                                className={`select select-bordered
@@ -497,7 +502,25 @@ export default function EditArticleListCopy(params:any) {
                                                    {option.label}
                                                  </option>
                                                ))}
-                                             </Field>
+                                             </Field> */}
+                                             <Select
+                              name={`rows.${index}.customer_id`}
+                              placeholder="Select Customer"
+                              options={customerOptions}
+                              onChange={(option: any) => {
+                                setFieldValue(
+                                  `rows.${index}.customer_id`,
+                                  option.value
+                                );
+                              }}
+                              className={`text-lg mt-1 bg-white select-bordered mx-auto w-full max-w-md ${
+                                typeof errors.rows?.[index] === "object" &&
+                                errors.rows?.[index]?.customer_id &&
+                                touched.rows?.[index]?.customer_id
+                                  ? "border-red-500"
+                                  : ""
+                              }`}
+                              />
                                              <ErrorMessage
                                                                                                                        name={`rows.${index}.customer_id`}
                                                                                                                        component="div"

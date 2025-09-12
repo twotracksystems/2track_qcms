@@ -6,6 +6,7 @@ export async function POST(req: NextRequest) {
     // Parse incoming request data
     const data = await req.json();
     const {
+      id_number, // Assuming this is the ID Number you want to insert
       article_name,
       customer_id,
       article_nominal,
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
     } = data;
 
     console.log("Recieve data"
-    ,article_name,
+    ,id_number,article_name,
     customer_id,
     article_nominal,
     article_min,
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {
       .from("tbl_article")
       .insert([
         {
+          id_number: id_number || null, // Ensure id_number is not undefined  
           article_name: article_name || null,
           customer_id: customer_id,
           article_nominal: article_nominal,

@@ -7,13 +7,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import * as Yup from "yup";
-import { FormInput, FormSelect } from "../UI/FormInput";
+import { FormInput,FormSearchableSelect, FormSelect } from "../UI/FormInput";
 import { useState, useEffect } from "react";
 export default function AddOrderList() {
   const navigator = useRouter();
 
   const Add_Order_Validator = Yup.object().shape({
-    Id: Yup.string().required("Id is required"),
+    OFId: Yup.string().required("Id is required"),
     // product_name: Yup.string().required("Product Name is required"),
     CustomerName: Yup.string().required("Customer Name is required"),
     ArticleName: Yup.string().required("Article Name is required"),
@@ -60,7 +60,7 @@ export default function AddOrderList() {
     queryKey: ["get_customer", page, search, limit],
     queryFn: async () => {
       const response = await fetch(
-        `/api/v1/get_customer?page=${page}&search=${search}&limit=${limit}`,
+        `/api/v1/get_customers?page=${page}&search=${search}&limit=${limit}`,
         {
           method: "GET",
           headers: {
@@ -72,7 +72,7 @@ export default function AddOrderList() {
       if (!response.ok) {
         throw new Error("Failed to fetch customers");
       }
-      return response.json();
+      return response.json(); 
     },
     staleTime: 5000, // Avoid flickering on refetch
     retry: 2,
@@ -114,7 +114,7 @@ export default function AddOrderList() {
   const articleOptions =
     articleData?.data.map((article: any) => ({
       value: article.id,
-      label: `${article.article_name}`,
+      label: `${article.id_number}`,
     })) || [];
 
   const {
@@ -122,10 +122,10 @@ export default function AddOrderList() {
     isFetching: isFetchingAssignees,
     isError: isErrorAssignees,
   } = useQuery({
-    queryKey: ["get_users", page, search, limit],
+    queryKey: ["get_users", page, search],
     queryFn: async () => {
       const response = await fetch(
-        `/api/v1/get_users?page=${page}&search=${search}&limit=${limit}`,
+        `/api/v1/get_users?page=${page}&search=${search}`,
         {
           method: "GET",
           headers: {
@@ -164,21 +164,21 @@ export default function AddOrderList() {
       </div>
       <Formik
         initialValues={{
-          Id: "",
-          product_name: "",
+          OFId: "",
+          // product_name: "",
           CustomerName: "",
           ArticleName: "",
-          AssigneeName: "",
+          // AssigneeName: "",
           PalleteCount: "",
         }}
         validationSchema={Add_Order_Validator}
         onSubmit={async (e, actions) => {
           AddOrderMutation.mutate({
-            id: e.Id,
-            product_name: e.product_name,
+            order_fabrication_control: e.OFId,
+            // product_name: e.product_name,
             customer_id: e.CustomerName,
             article_id: e.ArticleName,
-            assignee: e.AssigneeName,
+            // assignee: e.AssigneeName,
             pallete_count: e.PalleteCount,
           });
         }}
@@ -192,11 +192,12 @@ export default function AddOrderList() {
                   <div>
                     <FormInput
                       tooltip="Enter the order ID"
-                      name="Id"
+                      name="OFId"
+                      type="number" 
                       placeholder="Order ID"
                       label="Order ID"
-                      errors={errors.Id ? errors.Id : ""}
-                      touched={touched.Id ? "true":"" }// Adjust as needed
+                      errors={errors.OFId ? errors.OFId : ""}
+                      touched={touched.OFId ? "true":"" }// Adjust as needed
                     />
                   </div>
                   {/* <div>
@@ -211,7 +212,7 @@ export default function AddOrderList() {
                   </div> */}
                   <div>
                     <label className="form-control w-96 max-w-lg">
-                      <FormSelect
+                      {/* <FormSelect
                         tooltip="Select the customer's name from the dropdown"
                         name="CustomerName"
                         placeholder="Choose a customer"
@@ -222,12 +223,22 @@ export default function AddOrderList() {
                         touched={touched.CustomerName ? "true" :"" }// Adjust as needed
                       />
                       {isLoading && <p>Loading customers...</p>}
-                      {error && <p className="text-red-500">{error}</p>}
+                      {error && <p className="text-red-500">{error}</p>} */}
+                         <FormSearchableSelect
+        name="CustomerName"
+        label="Customer Name"
+        placeholder="Choose a customer"
+        tooltip="Select the customer's name from dropdown"
+
+        errors={errors.CustomerName}
+        touched={touched.CustomerName ? "true" :"" }// Adjust as needed
+        options={customerOptions}
+      />
                     </label>
                   </div>
                   <div>
                     <label className="form-control w-96 max-w-lg">
-                      <FormSelect
+                      {/* <FormSelect
                         tooltip="Select the product's name from the dropdown"
                         name="ArticleName"
                         placeholder="Choose a Product"
@@ -237,7 +248,17 @@ export default function AddOrderList() {
                         touched={touched.ArticleName? "true":""} // Adjust as needed
                       />
                       {isLoading && <p>Loading article...</p>}
-                      {error && <p className="text-red-500">{error}</p>}
+                      {error && <p className="text-red-500">{error}</p>} */}
+                      <FormSearchableSelect
+                              name="ArticleName"
+                              label="ID Article"
+                              placeholder="Choose a ID Article"
+                              
+                              tooltip="Select the ID Article from dropdown"
+                              errors={errors.ArticleName}
+                              touched={touched.ArticleName ? "true" :"" } // Adjust as needed
+                              options={articleOptions}
+                            />
                     </label>
                   </div>
                   {/* <div>

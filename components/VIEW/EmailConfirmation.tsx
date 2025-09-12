@@ -83,7 +83,7 @@ export default function LoginView() {
     >
       <div className="place-content-center bg-transparent card lg:card-side bg-base-100 inline my-auto mx-auto shadow-xl">
         <div className="w-full place-content-center inline bg-transparent">
-          <Image src="/Img/logo1.png" className="" alt="logo" width={400} height={429} />
+          <Image src="/Img/corex1.png" className="" alt="logo" width={400} height={429} />
           <div className="w-96 bg-transparent">
             <h1 className="text-2xl text-center font-bold text-black">Enter Your Verification Code</h1>
             <p className="text-center p-4 text-white">

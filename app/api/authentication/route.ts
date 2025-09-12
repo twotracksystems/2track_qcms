@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
   }
   const JoinData = { ...data, db_record:{...userinformation.data[0]} };
 
+  console.log("Login data:", JoinData); // Log the joined data for debugging
 
   return NextResponse.json(JoinData, {
     status: 200,

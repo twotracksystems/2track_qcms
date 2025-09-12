@@ -7,9 +7,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import * as Yup from "yup";
-import { FormInput, FormSelect } from "../UI/FormInput";
+import { FormInput, FormSearchableSelect, FormSelect } from "../UI/FormInput";
 import { useState, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
+import Select from "react-select";
 export default function AddOrderList(params:any) {
   
   const router = useRouter();
@@ -119,7 +120,7 @@ const supabase = createClient();
     queryKey: ["get_customer", page, search, limit],
     queryFn: async () => {
       const response = await fetch(
-        `/api/v1/get_customer?page=${page}&search=${search}&limit=${limit}`,
+        `/api/v1/get_customers?page=${page}&search=${search}&limit=${limit}`,
         {
           method: "GET",
           headers: {
@@ -151,7 +152,7 @@ console.log("Customer Data:",customerOptions);
     queryKey: ["get_article", page, search, limit],
     queryFn: async () => {
       const response = await fetch(
-        `/api/v1/get_article?page=${page}&search=${search}&limit=${limit}`,
+        `/api/v1/getall_article?page=${page}&search=${search}&limit=${limit}`,
         {
           method: "GET",
           headers: {
@@ -172,7 +173,7 @@ console.log("Customer Data:",customerOptions);
 
   const articleOptions = articleData?.data?.map((article: any) => ({
     value: article.id,
-    label: `${article.article_name}`,
+    label: `${article.id_number}`,
   })) || [];
 
   const [isRemoveModalOpen, setIsRemoveModalOpen] = useState(false);
@@ -247,6 +248,7 @@ const removeCustomerMutation = useMutation({
                     <FormInput
                       tooltip="Enter the order ID"
                       name="Id"
+                      type="number"
                       placeholder="Order ID"
                       label="Order ID"
                       errors={error ? error : ""}
@@ -267,7 +269,7 @@ const removeCustomerMutation = useMutation({
                   </div> */}
                   <div>
                     <label className="form-control w-96 max-w-lg">
-                    <FormSelect
+                    {/* <FormSelect
                       tooltip="Select the customer's name from the dropdown"
                       name="CustomerName"
                       placeholder="Choose a customer"
@@ -275,21 +277,32 @@ const removeCustomerMutation = useMutation({
                       options={customerOptions}
                       errors={error ? error : ""}
                       touched="true" // Adjust as needed
-                    />
+                    /> */}
+                   <FormSearchableSelect
+        name="CustomerName"
+        label="Customer Name"
+        placeholder="Choose a customer"
+        tooltip="Select the customer's name from dropdown"
+
+        errors={errors.CustomerName}
+        touched={touched.CustomerName ? "true" :"" }// Adjust as needed
+        options={customerOptions}
+      />
                     </label>
                   </div>
                   <div>
                     <label className="form-control w-96 max-w-lg">
-                    <FormSelect
-                      tooltip="Select the product's name from the dropdown"
-                      name="ArticleName"
-                      placeholder="Choose a Product"
-                      label="Product Name"
-                      options={articleOptions}
-                      errors={error ? error : ""}
-                      touched="true" // Adjust as needed
-                    />
+                   <FormSearchableSelect
+                              name="ArticleName"
+                              label="ID Article"
+                              placeholder="Choose a product"
+                              tooltip="Select the product name from dropdown"
+                              errors={errors.ArticleName}
+                              touched={touched.ArticleName ? "true" :"" } // Adjust as needed
+                              options={articleOptions}
+                            />
                     </label>
+
                   </div>
 
                   <div>
@@ -299,7 +312,7 @@ const removeCustomerMutation = useMutation({
                           Pallete Count
                           <span
                             className="tooltip tooltip-right"
-                            data-tip="Name of the site. This is required."
+                            data-tip="Enter a pallete count. This is required."
                           >
                             <CircleHelp
                               className=" my-auto"

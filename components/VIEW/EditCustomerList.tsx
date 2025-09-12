@@ -99,6 +99,8 @@ export default function EditCustomerList(params: any) {
     // lastname: Yup.string().required("Last Name is required"),
     // email: Yup.string().email("Invalid email").required("Email is required"),
     company_name: Yup.string().required("Company Name is required"),
+    customer_id: Yup.string().required("Customer ID is required"),
+    
   });
 
   const [isRemoveModalOpen, setIsRemoveModalOpen] = useState(false);
@@ -137,7 +139,7 @@ export default function EditCustomerList(params: any) {
       <div className="breadcrumbs my-4 text-lg text-slate-600 font-semibold">
         <ul>
           <li>
-            <Link href="/dashbaord/user_management">Customer Management</Link>
+            <Link href="/dashboard/customer_management">Customer Management</Link>
           </li>
           <li>
             <span>Edit Customer</span>
@@ -176,7 +178,7 @@ export default function EditCustomerList(params: any) {
                         label="Customer ID"
                         errors={errors.customer_id ? errors.customer_id : ""}
                         touched={touched.customer_id ? "true" : ""}
-                        type="number"
+                        type="text"
                         // readonly={true}
                       />
                     </label>

@@ -7,6 +7,7 @@ import { QueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import Select from 'react-select';
 import { Pencil, Radical } from "lucide-react";
 import * as Yup from "yup";
 
@@ -41,6 +42,7 @@ export default function AddArticleListCopy() {
     rows: [
       {
         // article_name: "",
+        id_number: "",
         article_name: "",
         customer_id: "",
         LengthNominal: "",
@@ -269,6 +271,7 @@ export default function AddArticleListCopy() {
               }
       
               await AddArticleMutation.mutateAsync({
+                id_number:row.id_number,
                 article_name: row.article_name,
                 customer_id: row.customer_id,
                 article_nominal: nominal.id,
@@ -299,6 +302,28 @@ export default function AddArticleListCopy() {
                       {values.rows.map((row, index) => (
                         <div key={index} className="flex gap-4">
                           <div className="inline gap-2">
+                            <label className="label">ID Number</label>
+                            <Field
+                              name={`rows.${index}.id_number`}
+                              type="text"
+                              placeholder="Enter ID Number"
+                              className={`input input-bordered
+                             ${
+                               typeof errors.rows?.[index] === "object" &&
+                               errors.rows?.[index]?.id_number &&
+                               touched.rows?.[index]?.id_number
+                                 ? "border-red-500"
+                                 : ""
+                             } 
+                            `}
+                            />{" "}
+                            <ErrorMessage
+                              name={`rows.${index}.id_number`}
+                              component="div"
+                              className="text-red-500 text-sm"
+                            />
+                          </div>
+                          <div className="inline gap-2">
                             <label className="label">Product Name</label>
                             <Field
                               name={`rows.${index}.article_name`}
@@ -322,7 +347,7 @@ export default function AddArticleListCopy() {
                           </div>
                           <div className="inline gap-2">
                             <label className="label">Customer Name</label>
-                            <Field
+                            {/* <Field
                               as="select"
                               name={`rows.${index}.customer_id`}
                               className={`select select-bordered
@@ -350,7 +375,27 @@ export default function AddArticleListCopy() {
                                   {option.label}
                                 </option>
                               ))}
-                            </Field>
+                            </Field> */}
+                            <Select
+                              name={`rows.${index}.customer_id`}
+                              placeholder="Select Customer"
+                              options={customerOptions}
+                              onChange={(option: any) => {
+                                setFieldValue(
+                                  `rows.${index}.customer_id`,
+                                  option.value
+                                );
+                              }}
+                              className={`text-lg mt-1 bg-white select-bordered mx-auto w-full max-w-md${
+                                typeof errors.rows?.[index] === "object" &&
+                                errors.rows?.[index]?.customer_id &&
+                                touched.rows?.[index]?.customer_id
+                                  ? "border-red-500"
+                                  : ""
+                              }`}
+                              
+                              />
+
                             <ErrorMessage
                               name={`rows.${index}.customer_id`}
                               component="div"

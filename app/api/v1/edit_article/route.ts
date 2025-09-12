@@ -8,7 +8,7 @@ export async function PUT(req: NextRequest) {
    
 
     // Parse request body
-    const {article_name,customer_id,article_nominal,article_min,article_max,number_control} =
+    const {id_number,article_name,customer_id,article_nominal,article_min,article_max,number_control} =
       await req.json();
 
     // Initialize Supabase client
@@ -27,6 +27,7 @@ export async function PUT(req: NextRequest) {
     const { data: userUpdateData, error: userUpdateError } = await supabase
       .from("tbl_article")
       .update({
+        id_number: id_number, // Assuming id_number is the same as the UUID
         article_name,
         customer_id,
         article_nominal,

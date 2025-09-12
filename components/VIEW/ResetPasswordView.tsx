@@ -7,36 +7,33 @@ import { useMutation } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Eye, EyeClosed } from "lucide-react";
-import { createClient } from "@/utils/supabase/client";
 
 export default function LoginView() {
-const [userName, setUserName] = useState({ first: "", last: "" });
-
-  useEffect(() => {
-    const storedFirstName = localStorage.getItem("firstName");
-    const storedLastName = localStorage.getItem("lastName");
-    if (storedFirstName && storedLastName) {
-      setUserName({ first: storedFirstName, last: storedLastName });
-    }
-  }, []);
   const route = useRouter();
-  
   const loginSchema = Yup.object({
     email: Yup.string()
       .email("Enter a valid email address.")
       .required("Email Address is required."),
-    password: Yup.string().required("Password is required."),
+     password: Yup.string()
+          .min(8, "Password must be 8 characters long")
+          .matches(/[0-9]/, "Password requires a number")
+          .matches(/[a-z]/, "Password requires a lowercase letter")
+          .matches(/[A-Z]/, "Password requires an uppercase letter"),
+    
+        confirmpassword: Yup.string()
+          .oneOf([Yup.ref("password"), undefined], "Passwords must match")
+          .required("Confirm Password is required"),
   });
- 
+
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false); // New state to control password visibility
-
+  const [CpasswordVisible, setCPasswordVisible] = useState(false);
   const mutateManangementLogin = useMutation({
     mutationFn: async (values: { email: string; password: string }) => {
-      const response = await fetch("/api/authentication/", {
-        method: "POST",
+      const response = await fetch("/api/reset_password/", {
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
@@ -61,11 +58,6 @@ const [userName, setUserName] = useState({ first: "", last: "" });
         route.push("/verify_email");
         return;
       }
-      console.log("Login datas:", data); // Log the joined data for debugging
-     
-  // Save to localStorage
-  localStorage.setItem("firstName", data.db_record.first_name);
-  localStorage.setItem("lastName", data.db_record.last_name);
 
       toast.success("Login Successful");
       route.push("/dashboard");
@@ -95,6 +87,7 @@ const [userName, setUserName] = useState({ first: "", last: "" });
             initialValues={{
               email: "",
               password: "",
+              confirmpassword: "",
             }}
             validationSchema={loginSchema}
             validateOnBlur={true}
@@ -136,11 +129,24 @@ const [userName, setUserName] = useState({ first: "", last: "" });
                     {passwordVisible ? <EyeClosed size={20} /> : <Eye size={20} />}
                   </span>
                 </div>
-                <div className="flex justify-between items-center">
-                  
-                  <a href="/forgot_password" className="text-white hover:underline">
-                    Forgot Password?
-                  </a>
+
+                <div className="relative">
+                 <FormInput
+                                        tooltip="Input of the Confirm Password. This is required."
+                                        name="confirmpassword"
+                                        placeholder="Confirm Password"
+                                        label="Confirm Password"
+                                        type={CpasswordVisible ? "text" : "password"}
+                                        errors={errors.confirmpassword ? errors.confirmpassword : ""}
+                                        touched={touched.confirmpassword ? "true" : ""}
+                                      />
+                                      {/* Show/Hide Confirm Password Icon */}
+                                      <span
+                    onClick={() => setCPasswordVisible(!CpasswordVisible)}
+                    className="absolute right-5 top-16 transform -translate-y-1/2 cursor-pointer"
+                  >
+                    {CpasswordVisible ? <EyeClosed size={20} /> : <Eye size={20} />}
+                  </span>
                 </div>
                 <div className="mx-auto w-3/4 flex ">
                   <button
@@ -157,7 +163,7 @@ const [userName, setUserName] = useState({ first: "", last: "" });
                         Authenticating...
                       </div>
                     ) : (
-                      "Log In"
+                      "Reset Password"
                     )}
                   </button>
                 </div>

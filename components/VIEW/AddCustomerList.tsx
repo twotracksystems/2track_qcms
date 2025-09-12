@@ -91,7 +91,7 @@ export default function AddCustomerList() {
     // email: Yup.string().email("Invalid email").required("Email is required"),
 
     company_name: Yup.string().required("Company Name is required."),
-    customer_id:Yup.number().required("Customer ID is required.")
+    customer_id:Yup.string().required("Company Name is required."),
   });
 
   return (
@@ -146,7 +146,7 @@ export default function AddCustomerList() {
                         label="Customer ID"
                         errors={errors.customer_id ? errors.customer_id : ""}
                         touched={touched.customer_id ? "true" : ""}
-                        type="number"
+                        type="text"
                         // readonly={true}
                       />
                     </label>
