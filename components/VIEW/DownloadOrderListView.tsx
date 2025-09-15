@@ -4,26 +4,30 @@ import toast from "react-hot-toast";
 import { createClient } from "@/utils/supabase/client";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { create } from "domain";
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 // packages to generate the different charts
-import { Doughnut } from "react-chartjs-2";
+import { Chart } from "chart.js/auto";
+import ChartDataLabels from "chartjs-plugin-datalabels";
+Chart.register(ChartDataLabels);
 
+// necessary functions in building the PDF files
 import {
   DrawFooter,
-  DrawGraph,
+  DrawGraphLabel,
   DrawHorizontalLine,
   DrawLeftHeader,
-  drawMainHeader,
-  drawRightHeader,
+  DrawMainHeader,
+  DrawRightHeader,
+  DrawMeasurementTables,
+  WriteH2OItalic,
 } from "./PDFBuilder";
 
 // necessary packages for exporting zip files
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
-import { Duration } from "luxon";
 
 interface DownloadOrderListViewProps {
   label?: string;
@@ -34,12 +38,27 @@ interface DownloadOrderListViewProps {
   selectedOrders?: any; // Array of selected order objects
 }
 
+type Measurement = {
+  length?: number;
+  inside_diameter?: number;
+  outside_diameter?: number;
+  flat_crush?: number;
+  h20?: number;
+  [key: string]: any;
+};
+
+type chartData = {
+  // declaration type will be used for the charts
+  data: number;
+  palette_count: number;
+};
+
 export default function DownloadOrderListView({
   label = "Download",
   className = "",
-  fileName = "quality_control_report.doc",
+  fileName = "quality_control_report.pdf",
   onPDFGenerated,
-  mode = "both",
+  mode = "preview",
   selectedOrders, // Array of selected order objects from the rows
 }: DownloadOrderListViewProps) {
   const baseStyle = { backgroundColor: "#1d4ed8", color: "#fff" };
@@ -48,8 +67,7 @@ export default function DownloadOrderListView({
   const [isDisabled, setIsDisabled] = useState(false);
   const [buttonLabel, setButtonLabel] = useState("Download");
 
-  // function to get control results
-  const GetControlResults = async () => {};
+  const canvasRef = useRef<HTMLCanvasElement>(null); // used to refer to the canvas element containing the chart
 
   // function to get customer specifications data
   const GetCustomerSpecificationsData = async (
@@ -120,14 +138,185 @@ export default function DownloadOrderListView({
     return customerSpecificationsDataAggregated;
   };
 
-  const handleClick = async () => {
-    console.log(selectedOrders);
+  const GetMeasurementData = async (orderId: number) => {
+    const responseMeasurementData = await fetch(
+      `/api/v1/getonemeasurement?id=${encodeURIComponent(orderId)}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "*/*",
+          "User-Agent": "Thunder Client (https://www.thunderclient.com)",
+        },
+      }
+    );
 
+    const measurementData = await responseMeasurementData.json();
+
+    if (responseMeasurementData.ok) {
+      return measurementData;
+    } else {
+      toast.error;
+    }
+  };
+
+  function calculateStats(data: Measurement[], field: keyof Measurement) {
+    // returns the descriptive statistics of the order measurements
+    const values = data
+      .map((d) => d[field])
+      .filter((v): v is number => typeof v === "number" && !isNaN(v));
+
+    if (values.length === 0) {
+      return { mean: 0, min: 0, max: 0, stdDev: 0 };
+    }
+
+    const n = values.length;
+    const sum = values.reduce((a, b) => a + b, 0);
+    const mean = sum / n;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const variance =
+      values.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / n;
+    const stdDev = Math.sqrt(variance);
+
+    // Helper to fix decimals to 2 places
+    const round2 = (num: number) => Number(num.toFixed(4));
+
+    return {
+      mean: round2(mean),
+      min: round2(min),
+      max: round2(max),
+      stdDev: round2(stdDev),
+    };
+  }
+
+  async function generateLineChartImage(
+    canvas: HTMLCanvasElement,
+    data: chartData[],
+    meanValue: number
+  ) {
+    // Destroy old instance if it exists
+    if (canvas && Chart.getChart(canvas)) {
+      Chart.getChart(canvas)?.destroy();
+    }
+
+    const ctx = canvas.getContext("2d")!;
+    const labels = data.map((d) => String(d.palette_count));
+    const values = data.map((d) => d.data);
+
+    const minVal = Math.min(...values);
+    const maxVal = Math.max(...values);
+    const padding = (maxVal - minVal) * 0.1; // 10% headroom
+    const chart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels, // your x values
+        datasets: [
+          {
+            data: values, // your y values
+            borderColor: "rgba(29, 78, 216, 1)",
+            backgroundColor: "rgba(29, 78, 216, 0.2)",
+            borderWidth: 1,
+            tension: 0.3,
+            pointRadius: 1,
+          },
+          // Mean point dataset
+          {
+            label: "Mean",
+            data: new Array(values.length)
+              .fill(null)
+              .map((_, i) =>
+                i === Math.floor(values.length / 2) ? meanValue : null
+              ),
+            borderColor: "red",
+            backgroundColor: "red",
+            pointRadius: 1.5,
+            pointHoverRadius: 6,
+            showLine: false,
+          },
+        ],
+      },
+      options: {
+        responsive: false,
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          datalabels: {
+            align: (ctx) => (ctx.dataIndex % 2 === 0 ? "top" : "bottom"), // position above point
+            anchor: "center", // attach to the point
+            font: {
+              size: 8,
+            },
+            offset: -1,
+            formatter: (value: number) =>
+              value.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }), // show formatted labels too
+          },
+        },
+        scales: {
+          y: {
+            ticks: {
+              font: {
+                size: 10,
+              },
+              stepSize: 5,
+              callback: (value) =>
+                Number(value).toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }), // 1,234.56 style
+            },
+            min: minVal - padding,
+            max: maxVal + padding,
+          },
+          x: {
+            ticks: {
+              font: {
+                size: 10,
+              },
+              callback: (value, index) => labels[index],
+            },
+          },
+        },
+      },
+      plugins: [
+        {
+          id: "meanLine",
+          afterDraw: (chart) => {
+            const yScale = chart.scales.y;
+            const ctx = chart.ctx;
+            const y = yScale.getPixelForValue(meanValue);
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(chart.chartArea.left, y);
+            ctx.lineTo(chart.chartArea.right, y);
+            ctx.strokeStyle = "red";
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([5, 5]); // dashed line
+            ctx.stroke();
+            ctx.restore();
+          },
+        },
+      ],
+    });
+
+    const imageUrl = canvas.toDataURL("image/png");
+    chart.destroy(); // free up the canvas for reuse
+    return imageUrl;
+  }
+
+  const handleClick = async () => {
     if (selectedOrders.length === 0) {
       toast.error("Please select an order", { duration: 1000 });
       return;
     }
     try {
+      // Open a blank tab synchronously if previewing to avoid popup blockers
+      const shouldPreview = mode !== "download";
+      const previewWindow = shouldPreview ? window.open("", "_blank") : null;
+
       const pdfs: any[] = [];
       setButtonLabel("Downloading..."); // inform user that doc is downloading
       setIsDisabled(true); // disables button during downloading
@@ -141,9 +330,12 @@ export default function DownloadOrderListView({
           // to be placed at the bottom left of the first page
           const current_date = new Date().toLocaleDateString("en-GB");
 
+          // get company name
           const company_name = get(order.tbl_customer.company_name);
 
           let customer: String = "";
+
+          // get customer name
           if (order.tbl_customer.customer_id == null) {
             customer = "____________________________";
           } else {
@@ -156,7 +348,42 @@ export default function DownloadOrderListView({
             ).toUpperCase();
           }
 
+          // get order fabrication control number
           const orderNo = get(order.order_fabrication_control);
+
+          // fetch measurements data
+          const measurementData = await GetMeasurementData(
+            get(order.id) as unknown as number
+          );
+
+          // fetch customer specifications data
+          const customerSpecificationsData =
+            await GetCustomerSpecificationsData(
+              get(order.tbl_article?.article_nominal) as unknown as number,
+              get(order.tbl_article?.article_min) as unknown as number,
+              get(order.tbl_article?.article_max) as unknown as number
+            );
+
+          // customer specifications data
+          const nominal_data = customerSpecificationsData[0];
+          const max_data = customerSpecificationsData[1];
+          const min_data = customerSpecificationsData[2];
+
+          // get all the descriptive statistics of the order for each measurement
+          const orderLengthStats = calculateStats(measurementData, "length");
+          const orderInsideDiameterStats = calculateStats(
+            measurementData,
+            "inside_diameter"
+          );
+          const orderOutsideDiameterStats = calculateStats(
+            measurementData,
+            "outside_diameter"
+          );
+          const orderFlatCrushStats = calculateStats(
+            measurementData,
+            "flat_crush"
+          );
+          const orderH2OStats = calculateStats(measurementData, "h20");
 
           // format delivery date and time
           const deliveryDate = get(order.exit_date_time);
@@ -180,19 +407,6 @@ export default function DownloadOrderListView({
             minute: "2-digit",
             second: "2-digit",
           });
-
-          // fetch customer specifications data
-          const customerSpecificationsData =
-            await GetCustomerSpecificationsData(
-              get(order.tbl_article?.article_nominal) as unknown as number,
-              get(order.tbl_article?.article_min) as unknown as number,
-              get(order.tbl_article?.article_max) as unknown as number
-            );
-
-          // customer specifications data
-          const nominal_data = customerSpecificationsData[0];
-          const max_data = customerSpecificationsData[1];
-          const min_data = customerSpecificationsData[2];
 
           // dynamically import jspdf to reduce bundle size
           const { default: jsPDF } = await import("jspdf");
@@ -218,10 +432,10 @@ export default function DownloadOrderListView({
           } catch {}
 
           // Right header text
-          drawRightHeader(doc, "AQ 30", 1, margin);
+          DrawRightHeader(doc, "AQ 30", 1, margin);
 
           // Main header text
-          drawMainHeader(doc, company_name, margin, 1);
+          DrawMainHeader(doc, company_name, margin, 1);
 
           // Horizontal line below headers
           DrawHorizontalLine(doc, margin, 155);
@@ -248,7 +462,7 @@ export default function DownloadOrderListView({
           );
 
           // Add text to cells with better positioning
-          doc.setFont("times new roman", "italic");
+          doc.setFont("times", "italic");
           doc.setFontSize(10);
 
           // Row 1
@@ -282,7 +496,7 @@ export default function DownloadOrderListView({
           doc.text(productionDateTime, margin + col1Width + 15, tableY + 79);
 
           // Merged cell in last column (spans all 3 rows)
-          doc.setFont("times new roman", "bold");
+          doc.setFont("times", "bold");
           doc.setFontSize(10);
           doc.text(
             `N° of ${orderNo}`,
@@ -324,12 +538,12 @@ export default function DownloadOrderListView({
           }
 
           // Table text
-          doc.setFont("times new roman", "italic");
+          doc.setFont("times", "italic");
           doc.setFontSize(10);
 
           // Column headers (row 1)
           // First column header is intentionally blank
-          doc.setFont("times new roman", "bold");
+          doc.setFont("times", "bold");
           doc.text(
             "Scoll Nominal",
             colX2 + specColOtherWidth / 2,
@@ -344,7 +558,7 @@ export default function DownloadOrderListView({
           });
 
           // Restore normal style for body rows
-          doc.setFont("times new roman", "italic");
+          doc.setFont("times", "italic");
 
           // First column labels
           const col1Labels = [
@@ -353,8 +567,10 @@ export default function DownloadOrderListView({
             "Innen (mm) / Interieur (mm) / Inside (mm)",
             "Aussen (mm) / exterieur (mm) / Outside (mm)",
             "Flat Crush (kN/m)",
-            "H20 (%)",
+            "",
           ];
+
+          WriteH2OItalic(doc, margin + 8, specTableY + 5 * rowHeight + 16);
 
           // Fill first column
           for (let r = 0; r < rows; r++) {
@@ -422,7 +638,7 @@ export default function DownloadOrderListView({
           doc.line(margin, margin + 480, pageWidth - margin, margin + 480);
 
           //Header title: Order
-          doc.setFont("times new roman", "bolditalic");
+          doc.setFont("times", "bolditalic");
           doc.setFontSize(12);
 
           //Header title: Customer specifications
@@ -443,11 +659,6 @@ export default function DownloadOrderListView({
           const ctrlRowHeight = 26;
           const ctrlRows = 6;
 
-          // (Optional borders disabled to keep lines transparent)
-          // doc.setDrawColor(30, 58, 138);
-          // doc.setLineWidth(1);
-          // doc.rect(margin, ctrlTableY, ctrlTableWidth, ctrlRowHeight * ctrlRows);
-
           // Column X positions (5 columns total)
           const ctrlColX2 = margin + ctrlCol1Width;
           const ctrlColX3 = ctrlColX2 + ctrlColOtherWidth;
@@ -461,31 +672,68 @@ export default function DownloadOrderListView({
           const ctrlCenter4 = margin + ctrlCol1Width + ctrlColWidthExact * 2.5;
           const ctrlCenter5 = margin + ctrlCol1Width + ctrlColWidthExact * 3.5;
 
-          // doc.line(ctrlColX2, ctrlTableY, ctrlColX2, ctrlTableY + ctrlRowHeight * ctrlRows);
-          // doc.line(ctrlColX3, ctrlTableY, ctrlColX3, ctrlTableY + ctrlRowHeight * ctrlRows);
-          // doc.line(ctrlColX4, ctrlTableY, ctrlColX4, ctrlTableY + ctrlRowHeight * ctrlRows);
-          // doc.line(ctrlColX5, ctrlTableY, ctrlColX5, ctrlTableY + ctrlRowHeight * ctrlRows);
-          for (let i = 1; i < ctrlRows; i++) {
-            // doc.line(margin, ctrlTableY + i * ctrlRowHeight, margin + ctrlTableWidth, ctrlTableY + i * ctrlRowHeight);
-          }
-
           // Table text
-          doc.setFont("times new roman", "italic");
+          doc.setFont("times", "italic");
           doc.setFontSize(10);
 
           // Column headers (row 1) — first column blank
-          doc.setFont("times new roman", "bold");
-          doc.text("x̄", ctrlCenter2, ctrlTableY + 16, { align: "center" });
+          doc.setFont("Helvetica-BoldOblique");
+          doc.getFontList();
+          try {
+            const logo = new Image();
+            logo.src = "/Img/xBar.png";
+            await logo.decode();
+            doc.addImage(
+              logo as HTMLImageElement,
+              "PNG",
+              ctrlCenter2,
+              ctrlTableY + 4,
+              16,
+              16
+            );
+          } catch {}
+
+          doc.setFont("times", "bolditalic");
           doc.text("Min (X)", ctrlCenter3, ctrlTableY + 16, {
             align: "center",
           });
           doc.text("Max (X)", ctrlCenter4, ctrlTableY + 16, {
             align: "center",
           });
-          doc.text("σ (X)", ctrlCenter5, ctrlTableY + 16, { align: "center" });
+          doc.setFont("symbol", "italic");
+
+          try {
+            const logo = new Image();
+            logo.src = "/Img/stdV.png";
+            await logo.decode();
+            doc.addImage(
+              logo as HTMLImageElement,
+              "PNG",
+              ctrlCenter5 - 28,
+              ctrlTableY - 7,
+              40,
+              40
+            );
+          } catch {}
+
+          try {
+            const logo = new Image();
+            logo.src = "/Img/xBar.png";
+            await logo.decode();
+            doc.addImage(
+              logo as HTMLImageElement,
+              "PNG",
+              ctrlCenter5 - 4,
+              ctrlTableY + 4,
+              16,
+              16
+            );
+          } catch {}
+
+          doc.text("", ctrlCenter5, ctrlTableY + 16, { align: "center" });
 
           // Restore normal style for body rows
-          doc.setFont("times new roman", "italic");
+          doc.setFont("times", "italic");
 
           // First column labels
           const ctrlCol1Labels = [
@@ -494,7 +742,7 @@ export default function DownloadOrderListView({
             "Innen (mm) / Interieur (mm) / Inside (mm)",
             "Aussen (mm) / exterieur (mm) / Outside (mm)",
             "Flat Crush (kN/m)",
-            "H20 (%)",
+            "",
           ];
 
           // Fill first column
@@ -503,14 +751,37 @@ export default function DownloadOrderListView({
             doc.text(ctrlCol1Labels[r], margin + 8, y);
           }
 
-          // Fill placeholder values *** for columns 2-5, rows 2-6
-          const ctrlPlaceholderRows = [1, 2, 3, 4, 5]; // zero-based rows for 2..6
+          WriteH2OItalic(doc, margin + 8, ctrlTableY + 5 * ctrlRowHeight + 16);
+
+          // Map row index to corresponding stats object
+          const ctrlStatsMap = [
+            null, // row 0 = header
+            orderLengthStats, // row 1
+            orderInsideDiameterStats, // row 2
+            orderOutsideDiameterStats, // row 3
+            orderFlatCrushStats, // row 4
+            orderH2OStats, // row 5
+          ];
+
+          const ctrlPlaceholderRows = [1, 2, 3, 4, 5]; // body rows
           ctrlPlaceholderRows.forEach((r) => {
+            const toUse = ctrlStatsMap[r];
             const y = ctrlTableY + r * ctrlRowHeight + 16;
-            doc.text("***", ctrlCenter2, y, { align: "center" });
-            doc.text("***", ctrlCenter3, y, { align: "center" });
-            doc.text("***", ctrlCenter4, y, { align: "center" });
-            doc.text("***", ctrlCenter5, y, { align: "center" });
+
+            if (toUse) {
+              doc.text(toUse.mean?.toString() || "", ctrlCenter2, y, {
+                align: "center",
+              });
+              doc.text(toUse.min?.toString() || "", ctrlCenter3, y, {
+                align: "center",
+              });
+              doc.text(toUse.max?.toString() || "", ctrlCenter4, y, {
+                align: "center",
+              });
+              doc.text(toUse.stdDev?.toString() || "", ctrlCenter5, y, {
+                align: "center",
+              });
+            }
           });
 
           // Horizontal line separator with dark blue color
@@ -534,20 +805,20 @@ export default function DownloadOrderListView({
           const fColX2 = fColX1 + footerColWidth;
           const fColX3 = fColX2 + footerColWidth;
 
-          doc.setFont("times new roman", "italic");
+          doc.setFont("times", "italic");
           doc.setFontSize(10);
 
           // First column content
           doc.text("Datum / Date", fColX1 + 8, footerTableY + 15);
 
-          doc.setFont("times new roman", "bolditalic");
+          doc.setFont("times", "bolditalic");
           doc.text(
             `${current_date}`,
             fColX1 + 8,
             footerTableY + footerRowHeight + 15
           );
 
-          doc.setFont("times new roman", "italic");
+          doc.setFont("times", "italic");
           // Second column content
           doc.text(`${customer}`, fColX2 + 8, footerTableY + 15, {
             align: "center",
@@ -560,7 +831,7 @@ export default function DownloadOrderListView({
           );
 
           // Third column merged content
-          doc.setFont("times new roman", "bold");
+          doc.setFont("times", "bold");
           doc.text(
             "Document synthese",
             fColX3 + footerColWidth / 2,
@@ -570,6 +841,71 @@ export default function DownloadOrderListView({
 
           // Page 02 start
           doc.addPage();
+
+          // LENGTH DATA
+          const lengthData: chartData[] = measurementData // use the length data in the measurements table of the order ID
+            .map((lengthInstance: any) => ({
+              data: lengthInstance["length"],
+              palette_count: Number(lengthInstance["pallete_count"]),
+            }));
+
+          const lengthLineChartImage = await generateLineChartImage(
+            canvasRef.current!,
+            lengthData,
+            orderLengthStats["mean"]
+          ).then();
+
+          // INSIDE DATA
+          const insideData: chartData[] = measurementData // use the inside diameter data in the measurements table of the order ID
+            .map((insideInstance: any) => ({
+              data: insideInstance["inside_diameter"],
+              palette_count: Number(insideInstance["pallete_count"]),
+            }));
+
+          const insideLineChartImage = await generateLineChartImage(
+            canvasRef.current!,
+            insideData,
+            orderInsideDiameterStats["mean"]
+          ).then();
+
+          // OUTSIDE DATA
+          const outsideData: chartData[] = measurementData // use the outside diameter data in the measurements table of the order ID
+            .map((outsideInstance: any) => ({
+              data: outsideInstance["outside_diameter"],
+              palette_count: Number(outsideInstance["pallete_count"]),
+            }));
+
+          const outsideLineChartImage = await generateLineChartImage(
+            canvasRef.current!,
+            outsideData,
+            orderOutsideDiameterStats["mean"]
+          ).then();
+
+          // FLAT CRUSH DATA
+          const flatCrushData: chartData[] = measurementData // use the flat crush data in the measurements table of the order ID
+            .map((flatCrushInstance: any) => ({
+              data: flatCrushInstance["flat_crush"],
+              palette_count: Number(flatCrushInstance["pallete_count"]),
+            }));
+
+          const flatCrushLineChartImage = await generateLineChartImage(
+            canvasRef.current!,
+            flatCrushData,
+            orderFlatCrushStats["mean"]
+          );
+
+          // H2O DATA
+          const h2oData: chartData[] = measurementData // use the h2O data in the measurements table of the order ID
+            .map((h2oInstance: any) => ({
+              data: h2oInstance["h20"],
+              palette_count: Number(h2oInstance["pallete_count"]),
+            }));
+
+          const h2oLineChartImage = await generateLineChartImage(
+            canvasRef.current!,
+            h2oData,
+            orderH2OStats["mean"]
+          );
 
           // Try to load logo from public path and place it on the PDF
           try {
@@ -587,17 +923,28 @@ export default function DownloadOrderListView({
           } catch {}
 
           // Right header text
-          drawRightHeader(doc, "AQ 30", 2, margin);
+          DrawRightHeader(doc, "AQ 30", 2, margin);
 
           // Main header text
-          drawMainHeader(doc, company_name, margin, 2);
+          DrawMainHeader(doc, company_name, margin, 2);
 
           // Horizontal line below headers
           DrawHorizontalLine(doc, margin, 130);
 
-          // Draw the first graph
+          // Draw the first graph [Length]
+          DrawGraphLabel(doc, "length", margin, lengthLineChartImage);
 
-          DrawGraph(doc, nominal_data["length"], margin);
+          // Draw the second graph [Inside diameter]
+          DrawGraphLabel(doc, "inside", margin, insideLineChartImage);
+
+          // Draw the third graph [Outside diameter]
+          DrawGraphLabel(doc, "outside", margin, outsideLineChartImage);
+
+          // Draw the fourth graph [flat crush]
+          DrawGraphLabel(doc, "flat_crush", margin, flatCrushLineChartImage);
+
+          // Draw the last graph [h20]
+          DrawGraphLabel(doc, "h2o", margin, h2oLineChartImage);
 
           // Horizontal line for footer
           DrawHorizontalLine(doc, margin, 720);
@@ -609,6 +956,7 @@ export default function DownloadOrderListView({
             orderNo,
             current_date
           );
+
           // Page 03 start
           doc.addPage();
 
@@ -628,13 +976,23 @@ export default function DownloadOrderListView({
           } catch {}
 
           // Right header text
-          drawRightHeader(doc, "AQ 30", 3, margin);
+          DrawRightHeader(doc, "AQ 30", 3, margin);
 
           // Main header text
-          drawMainHeader(doc, company_name, margin, 3);
+          DrawMainHeader(doc, company_name, margin, 3);
 
           // Horizontal line below headers
           DrawHorizontalLine(doc, margin, 130);
+
+          // Draw the tables in page 03
+          DrawMeasurementTables(
+            doc,
+            180,
+            measurementData,
+            company_name,
+            orderNo,
+            current_date
+          );
 
           // Horizontal line for footer
           DrawHorizontalLine(doc, margin, 720);
@@ -656,7 +1014,6 @@ export default function DownloadOrderListView({
         // more than 1 file to download - create zip
         const zip = new JSZip();
         mode = "download";
-        console.log("pdfs for zipping: ", pdfs);
 
         pdfs.forEach(({ doc, filename }) => {
           const pdfBlob = doc.output("blob");
@@ -671,35 +1028,49 @@ export default function DownloadOrderListView({
       } else {
         // isa lang ka file ang idownload or preview
         // Generate PDF blob for preview
-        const { doc, fileName } = pdfs[0];
+        const { doc, filename } = pdfs[0];
         const pdfBlob = doc.output("blob");
 
         // Handle different modes
         if (mode === "preview") {
           onPDFGenerated?.(pdfBlob);
-          mode === "preview";
           const url = URL.createObjectURL(pdfBlob);
-          console.log("[DownloadOrderListView] Preview Blob URL:", url);
           (window as any).__lastPdfUrl = url; // Access from DevTools: window.__lastPdfUrl
-          window.open(url);
+          if (previewWindow) {
+            try {
+              previewWindow.location.assign(url);
+            } catch (_) {
+              window.open(url, "_blank");
+            }
+          } else {
+            window.open(url, "_blank");
+          }
           toast.success("PDF generated for preview");
           setIsDisabled(false);
           setButtonLabel("Download");
           return;
         } else if (mode === "download") {
-          doc.save(fileName);
+          // Prefer the generated filename, fallback to prop
+          doc.save(filename || fileName);
           toast.success("PDF downloaded");
           setIsDisabled(false);
           setButtonLabel("Download");
         } else {
           onPDFGenerated?.(pdfBlob);
           const url = URL.createObjectURL(pdfBlob);
-          console.log("[DownloadOrderListView] Preview Blob URL:", url);
           (window as any).__lastPdfUrl = url; // Access from DevTools: window.__lastPdfUrl
-          window.open(url);
+          if (previewWindow) {
+            try {
+              previewWindow.location.assign(url);
+            } catch (_) {
+              window.open(url, "_blank");
+            }
+          } else {
+            window.open(url, "_blank");
+          }
           const a = document.createElement("a");
           a.href = url;
-          a.download = fileName || pdfs[0]["filename"]; // Use the pdf's fileName
+          a.download = filename || fileName || pdfs[0]["filename"]; // Use the pdf's filename
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
@@ -718,13 +1089,22 @@ export default function DownloadOrderListView({
   };
 
   return (
-    <button
-      onClick={handleClick}
-      disabled={isDisabled}
-      className={`btn ${className}`}
-      style={isDisabled ? { ...baseStyle, ...disabledStyle } : baseStyle}
-    >
-      {buttonLabel}
-    </button>
+    <div>
+      <button
+        onClick={handleClick}
+        disabled={isDisabled}
+        className={`btn ${className}`}
+        style={isDisabled ? { ...baseStyle, ...disabledStyle } : baseStyle}
+      >
+        {buttonLabel}
+      </button>
+      <canvas
+        ref={canvasRef}
+        // Match the PDF target aspect ratio (410x105) at 2x resolution for crispness
+        width="820"
+        height="210"
+        style={{ display: "none" }}
+      />
+    </div>
   );
 }

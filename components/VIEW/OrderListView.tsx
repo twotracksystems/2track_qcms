@@ -116,68 +116,74 @@ export default function OrderListView() {
   
   // Selection state for table rows
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // Persist full order objects by id to allow cross-page download
+  const [selectedById, setSelectedById] = useState<Record<string, any>>({});
   const selectAllRef = useRef<HTMLInputElement>(null);
 
   // Function to toggle "select all" rows
-  const toggleSelectAll = () => {     
-    // Get rows safely (make sure it's an array)
+  const toggleSelectAll = () => {
+    // Get rows safely (current page only)
     const rows: any[] = Array.isArray(ordersData?.data) ? ordersData!.data : [];
-    if (!rows.length) return; // do nothing if no rows exist
+    if (!rows.length) return;
 
-    // If ALL rows are already selected → unselect all
-    if (selectedIds.length === rows.length) {
-      setSelectedIds([]);
+    const pageIds = rows.map((row: any) => String(row.id));
+    const allPageSelected = pageIds.every((id) => selectedIds.includes(id));
+
+    if (allPageSelected) {
+      // Unselect only current page rows
+      setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+      setSelectedById((prev) => {
+        const next = { ...prev };
+        for (const id of pageIds) delete next[id];
+        return next;
+      });
     } else {
-      // Otherwise → select all rows by mapping their IDs into an array
-      setSelectedIds(rows.map((o: any) => String(o.id)));
+      // Select all current page rows, preserving previous selections
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+      setSelectedById((prev) => {
+        const next = { ...prev };
+        for (const row of rows) next[String(row.id)] = row;
+        return next;
+      });
     }
   };
 
   // Function to toggle a single row by ID
   const toggleSelectOne = (id: string) => {
+    const rows: any[] = Array.isArray(ordersData?.data) ? ordersData!.data : [];
+    const found = rows.find((r) => String(r.id) === id);
     setSelectedIds((prev) =>
-      // If this row ID is already in the selection → remove it
-      prev.includes(id) ? prev.filter((x) => x !== id) 
-       // Otherwise → add it to the selection
-      : [...prev, id]
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+    setSelectedById((prev) => {
+      const next = { ...prev };
+      if (prev[id]) {
+        delete next[id];
+      } else if (found) {
+        next[id] = found;
+      }
+      return next;
+    });
   };
 
   // Effect to update "Select All" checkbox state
   useEffect(() => {
-    // Safely get rows again
+    // Determine selection state for current page only
     const rows: any[] = Array.isArray(ordersData?.data) ? ordersData!.data : [];
+    const pageIds = rows.map((row: any) => String(row.id));
+    const selectedOnPage = pageIds.filter((id) => selectedIds.includes(id));
 
-    // If the Select All checkbox exists
     if (selectAllRef.current) {
-      // Set indeterminate state (dash mark instead of check) if:
-      // - At least 1 row is selected, AND
-      // - Not all rows are selected
       selectAllRef.current.indeterminate =
-        selectedIds.length > 0 && selectedIds.length < rows.length;
+        selectedOnPage.length > 0 && selectedOnPage.length < pageIds.length;
     }
   }, [selectedIds, ordersData]); // run whenever selection or rows change
 
   const selectedOrders = React.useMemo(() => {
-    const rows: any[] = Array.isArray(ordersData?.data) ? ordersData!.data : [];
-
-    // If no rows or no selection → return empty array
-    if (!rows.length || selectedIds.length === 0) return [];
-
-    const result: any[] = [];
-
-    // Loop through each row
-    for (let i = 0; i < rows.length; i++) {
-      const order = rows[i];
-
-      // If the current order’s ID is in selectedIds, add it to result
-      if (selectedIds.includes(String(order.id))) {
-        result.push(order);
-      }
-    }
-
-      return result; // array of all selected orders
-  }, [ordersData, selectedIds]);
+    // Provide all selected orders across all pages
+    if (selectedIds.length === 0) return [];
+    return selectedIds.map((id) => selectedById[id]).filter(Boolean);
+  }, [selectedIds, selectedById]);
 
   useEffect(() => {
     const fetchUserEmail = async () => {
@@ -1064,10 +1070,14 @@ export default function OrderListView() {
                   ref={selectAllRef}
                   type="checkbox"
                   className="checkbox checkbox-primary"
-                  checked={
-                    (ordersData?.data?.length || 0) > 0 &&
-                    selectedIds.length === (ordersData?.data?.length || 0)
-                  }
+                  checked={(() => {
+                    const rows: any[] = Array.isArray(ordersData?.data)
+                      ? ordersData!.data
+                      : [];
+                    if (!rows.length) return false;
+                    const pageIds = rows.map((r: any) => String(r.id));
+                    return pageIds.every((id) => selectedIds.includes(id));
+                  })()}
                   onChange={toggleSelectAll}
                 />
               </th>
