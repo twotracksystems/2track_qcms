@@ -1100,8 +1100,9 @@ export default function DownloadOrderListView({
       </button>
       <canvas
         ref={canvasRef}
-        width="400"
-        height="200"
+        // Match the PDF target aspect ratio (410x105) at 2x resolution for crispness
+        width="820"
+        height="210"
         style={{ display: "none" }}
       />
     </div>
