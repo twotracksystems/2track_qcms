@@ -11,6 +11,7 @@ import * as Yup from "yup";
 import { FormSelect } from "../UI/FormInput";
 import { DateTime } from "luxon";
 import { start } from "repl";
+import DownloadOrderListView from "./DownloadOrderListView";
 import { read } from "fs";
 
 export default function OrderListView() {
@@ -21,8 +22,6 @@ export default function OrderListView() {
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  // const [order, setOrder] = useState("Order");
-  // const [sort_by, setSort_by] = useState("Sort By");
   const {
     data: ordersData,
     refetch: refetchOrdersData,
@@ -37,8 +36,6 @@ export default function OrderListView() {
       limit,
       startDate,
       endDate,
-      // sort_by,
-      // order,
     ],
     queryFn: async () => {
       if (startDate && endDate) {
@@ -85,6 +82,8 @@ export default function OrderListView() {
     },
     retry: 1,
   });
+
+
 
   const navigator = useRouter();
   const supabase = createClient();
@@ -135,6 +134,77 @@ export default function OrderListView() {
 
   console.log("current enablepallete: ", enablepallete);
   console.log("rows lenght", tractnumbercontrollenght);
+  
+  // Selection state for table rows
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // Persist full order objects by id to allow cross-page download
+  const [selectedById, setSelectedById] = useState<Record<string, any>>({});
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  // Function to toggle "select all" rows
+  const toggleSelectAll = () => {
+    // Get rows safely (current page only)
+    const rows: any[] = Array.isArray(ordersData?.data) ? ordersData!.data : [];
+    if (!rows.length) return;
+
+    const pageIds = rows.map((row: any) => String(row.id));
+    const allPageSelected = pageIds.every((id) => selectedIds.includes(id));
+
+    if (allPageSelected) {
+      // Unselect only current page rows
+      setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+      setSelectedById((prev) => {
+        const next = { ...prev };
+        for (const id of pageIds) delete next[id];
+        return next;
+      });
+    } else {
+      // Select all current page rows, preserving previous selections
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...pageIds])));
+      setSelectedById((prev) => {
+        const next = { ...prev };
+        for (const row of rows) next[String(row.id)] = row;
+        return next;
+      });
+    }
+  };
+
+  // Function to toggle a single row by ID
+  const toggleSelectOne = (id: string) => {
+    const rows: any[] = Array.isArray(ordersData?.data) ? ordersData!.data : [];
+    const found = rows.find((r) => String(r.id) === id);
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+    setSelectedById((prev) => {
+      const next = { ...prev };
+      if (prev[id]) {
+        delete next[id];
+      } else if (found) {
+        next[id] = found;
+      }
+      return next;
+    });
+  };
+
+  // Effect to update "Select All" checkbox state
+  useEffect(() => {
+    // Determine selection state for current page only
+    const rows: any[] = Array.isArray(ordersData?.data) ? ordersData!.data : [];
+    const pageIds = rows.map((row: any) => String(row.id));
+    const selectedOnPage = pageIds.filter((id) => selectedIds.includes(id));
+
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate =
+        selectedOnPage.length > 0 && selectedOnPage.length < pageIds.length;
+    }
+  }, [selectedIds, ordersData]); // run whenever selection or rows change
+
+  const selectedOrders = React.useMemo(() => {
+    // Provide all selected orders across all pages
+    if (selectedIds.length === 0) return [];
+    return selectedIds.map((id) => selectedById[id]).filter(Boolean);
+  }, [selectedIds, selectedById]);
 
   useEffect(() => {
     const fetchUserEmail = async () => {
@@ -183,7 +253,6 @@ export default function OrderListView() {
           : "Unknown",
       };
     }) || [];
-  console.log("Orders With Customer Names:", ordersWithCustomerNames);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAssignModalOpen, setAssignModal] = useState(false);
@@ -265,18 +334,6 @@ export default function OrderListView() {
     ],
   });
 
-  // useEffect(() => {
-  //   setInitialValuesMeasurement((prev) => ({
-  //     ...prev,
-  //     rowsmeasurement: prev.rowsmeasurement.map((row) => ({
-  //       ...row,
-  //       pallete_count: lastpalleteCount,
-  //     })),
-  //   }));
-  // }, [lastpalleteCount]);
-
-  // console.log("controlnumber:  ", initialValuesMeasurement.rowsmeasurement[0].number_of_control);
-  //   console.log("controlnumber:  ", initialValuesMeasurement.rowsmeasurement[0].number_of_control);
   const initialValuesAssign = {
     user_id: "",
   };
@@ -336,6 +393,9 @@ export default function OrderListView() {
       refetchProductionData();
     },
   });
+
+  // Handle PDF download (calls shared PDF utility)
+  // PDF download now handled by DownloadOrderListView component
 
   const { data: fetchedProductionData, refetch: refetchProductionData } =
     useQuery({
@@ -1023,6 +1083,13 @@ export default function OrderListView() {
                 Refresh
               </button>
             </div>
+            <div className="flex flex-col">
+              <label className="text-black invisible">End Date: </label>
+              <DownloadOrderListView
+                className="my-auto"
+                selectedOrders={selectedOrders}
+              />
+            </div>
 
             {/* <button
     onClick={() => {
@@ -1039,6 +1106,22 @@ export default function OrderListView() {
         <table className="table text-center">
           <thead>
             <tr>
+              <th>
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  className="checkbox checkbox-primary"
+                  checked={(() => {
+                    const rows: any[] = Array.isArray(ordersData?.data)
+                      ? ordersData!.data
+                      : [];
+                    if (!rows.length) return false;
+                    const pageIds = rows.map((r: any) => String(r.id));
+                    return pageIds.every((id) => selectedIds.includes(id));
+                  })()}
+                  onChange={toggleSelectAll}
+                />
+              </th>
               <th>OF ID</th>
               {/* <th>Product Name</th> */}
               <th>Customer Name</th>
@@ -1053,19 +1136,27 @@ export default function OrderListView() {
           <tbody>
             {isLoading || isFetching ? (
               <tr>
-                <td colSpan={7}>
+                <td colSpan={8}>
                   <span className="loading loading-dots loading-md"></span>
                 </td>
               </tr>
             ) : isError ? (
               <tr>
-                <td className="text-error font-bold" colSpan={7}>
+                <td className="text-error font-bold" colSpan={8}>
                   Something went wrong while fetching orders list.
                 </td>
               </tr>
             ) : ordersData?.data?.length > 0 ? (
               ordersData.data.map((order: any, index: number) => (
                 <tr key={index}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-primary"
+                      checked={selectedIds.includes(String(order.id))}
+                      onChange={() => toggleSelectOne(String(order.id))}
+                    />
+                  </td>
                   <td
                     className="text-xs hover:text-orange-500 hover:cursor-pointer"
                     onClick={() => {
@@ -1128,7 +1219,7 @@ export default function OrderListView() {
               ))
             ) : (
               <tr>
-                <td className="font-bold" colSpan={7}>
+                <td className="font-bold" colSpan={8}>
                   NO DATA FOUND.
                 </td>
               </tr>
@@ -1136,7 +1227,7 @@ export default function OrderListView() {
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={7}>
+              <td colSpan={8}>
                 <span className="text-xs">
                   {ordersData?.total_count
                     ? `${(page - 1) * limit + 1}-${Math.min(
