@@ -155,7 +155,8 @@ export default function DownloadOrderListView({
     if (responseMeasurementData.ok) {
       return measurementData;
     } else {
-      toast.error;
+      toast.error("Failed to fetch measurement data");
+      return [] as Measurement[];
     }
   };
 
@@ -333,7 +334,7 @@ export default function DownloadOrderListView({
           // get company name
           const company_name = get(order.tbl_customer.company_name);
 
-          let customer: String = "";
+          let customer: string = "";
 
           // get customer name
           if (order.tbl_customer.customer_id == null) {
