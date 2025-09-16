@@ -115,13 +115,13 @@ export function DrawGraphLabel(
   margin: number = 40, // used to map x position
   chartImage: string // base 64 image data
 ) {
-  let label_x_pos = margin + 20;
+  const label_x_pos = margin + 20;
   let label_y_pos = 0;
-  let chart_x_pos = margin + 100;
+  const chart_x_pos = margin + 100;
   let chart_y_pos = 0;
 
-  let chart_width = 410;
-  let chart_height = 105;
+  const chart_width = 410;
+  const chart_height = 105;
 
   let label: string[] = [];
 
@@ -156,9 +156,9 @@ export function DrawGraphLabel(
   doc.setFont("times", "bold");
   doc.setFontSize(12);
 
-  label.map((label, index) => {
+  label.forEach((lbl) => {
     // Loop through the different labels
-    doc.text(label, label_x_pos, label_y_pos, { align: "left" });
+    doc.text(lbl, label_x_pos, label_y_pos, { align: "left" });
     label_y_pos += 15;
   });
 
@@ -178,8 +178,8 @@ export function DrawGraphLabel(
 export function DrawFooter(
   doc: jsPDF,
   margin: number = 40, // used to map x position
-  order_number: String = "",
-  date: String = ""
+  order_number: string = "",
+  date: string = ""
 ) {
   const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -309,7 +309,7 @@ export function DrawMeasurementTables(
     const colLeft = onLeftColumn ? sideLeft : sideLeft + colW + gap;
 
     // Ensure the target page exists and is active
-    if (currentPage > doc.internal.getNumberOfPages()) doc.addPage();
+    if (currentPage > doc.getNumberOfPages()) doc.addPage();
     doc.setPage(currentPage);
 
     // Right header text
@@ -379,7 +379,7 @@ export function DrawMeasurementTables(
     // so the RIGHT column on the current page is still free.
     const colLeft = sideLeft + colW + gap;
 
-    if (currentPage > doc.internal.getNumberOfPages()) doc.addPage();
+    if (currentPage > doc.getNumberOfPages()) doc.addPage();
     doc.setPage(currentPage);
 
     // Right header text
@@ -439,7 +439,7 @@ export function DrawMeasurementTables(
       // Not enough space; add a new page and start at contentTop
 
       currentPage++;
-      if (currentPage > doc.internal.getNumberOfPages()) doc.addPage();
+      if (currentPage > doc.getNumberOfPages()) doc.addPage();
       doc.setPage(currentPage);
 
       // Right header text
@@ -488,7 +488,7 @@ export function DrawMeasurementTables(
       });
     } else {
       // Same page, full-width directly below the Measurements table
-      if (currentPage > doc.internal.getNumberOfPages()) doc.addPage();
+      if (currentPage > doc.getNumberOfPages()) doc.addPage();
       doc.setPage(currentPage);
 
       // Right header text
@@ -542,7 +542,7 @@ export function DrawMeasurementTables(
 
 /** Ensure at least N pages exist; set current page to N. */
 function ensurePage(doc: jsPDF, pageNumber: number) {
-  const have = doc.internal.getNumberOfPages();
+  const have = doc.getNumberOfPages();
   for (let i = have; i < pageNumber; i++) doc.addPage();
   doc.setPage(pageNumber);
 }
