@@ -318,10 +318,6 @@ export default function DownloadOrderListView({
     setButtonLabel("Downloading...");
     setIsDisabled(true);
     try {
-      // Open a blank tab synchronously if previewing to avoid popup blockers
-      const shouldPreview = mode !== "download";
-      const previewWindow = shouldPreview ? window.open("", "_blank") : null;
-
       const pdfs: any[] = [];
 
       await Promise.all(
@@ -1016,7 +1012,6 @@ export default function DownloadOrderListView({
       if (pdfs.length > 1) {
         // more than 1 file to download - create zip
         const zip = new JSZip();
-        mode = "download";
 
         pdfs.forEach(({ doc, filename }) => {
           const pdfBlob = doc.output("blob");
@@ -1031,47 +1026,33 @@ export default function DownloadOrderListView({
         // Generate PDF blob for preview
         const { doc, filename } = pdfs[0];
         const pdfBlob = doc.output("blob");
+        const baseName = filename || fileName;
+        const normalizedName = baseName.toLowerCase().endsWith(".pdf")
+          ? baseName
+          : `${baseName}.pdf`;
+
+        const shouldDownloadFile =
+          mode === "download" ||
+          mode === "both" ||
+          (mode === "preview" && !onPDFGenerated);
 
         // Handle different modes
         if (mode === "preview") {
           onPDFGenerated?.(pdfBlob);
-          const url = URL.createObjectURL(pdfBlob);
-          (window as any).__lastPdfUrl = url; // Access from DevTools: window.__lastPdfUrl
-          if (previewWindow) {
-            try {
-              previewWindow.location.assign(url);
-            } catch (_) {
-              window.open(url, "_blank");
-            }
-          } else {
-            window.open(url, "_blank");
+          if (shouldDownloadFile) {
+            saveAs(pdfBlob, normalizedName);
           }
-          toast.success("PDF generated for preview");
+          toast.success(
+            shouldDownloadFile ? "PDF downloaded" : "PDF generated for preview"
+          );
           return;
         } else if (mode === "download") {
-          // Prefer the generated filename, fallback to prop
-          doc.save(filename || fileName);
+          saveAs(pdfBlob, normalizedName);
           toast.success("PDF downloaded");
         } else {
           onPDFGenerated?.(pdfBlob);
-          const url = URL.createObjectURL(pdfBlob);
-          (window as any).__lastPdfUrl = url; // Access from DevTools: window.__lastPdfUrl
-          if (previewWindow) {
-            try {
-              previewWindow.location.assign(url);
-            } catch (_) {
-              window.open(url, "_blank");
-            }
-          } else {
-            window.open(url, "_blank");
-          }
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = filename || fileName || pdfs[0]["filename"]; // Use the pdf's filename
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          toast.success("PDF generated for preview");
+          saveAs(pdfBlob, normalizedName);
+          toast.success("PDF downloaded");
           return;
         }
       }
