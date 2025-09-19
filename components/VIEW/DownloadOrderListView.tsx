@@ -35,7 +35,7 @@ interface DownloadOrderListViewProps {
   fileName?: string;
   onPDFGenerated?: (blob: Blob) => void;
   mode?: "download" | "preview" | "both";
-  selectedOrders?: any; // Array of selected order objects
+  selectedOrders?: any[]; // Array of selected order objects
 }
 
 type Measurement = {
@@ -59,13 +59,14 @@ export default function DownloadOrderListView({
   fileName = "quality_control_report.pdf",
   onPDFGenerated,
   mode = "preview",
-  selectedOrders, // Array of selected order objects from the rows
+  selectedOrders = [], // Array of selected order objects from the rows
 }: DownloadOrderListViewProps) {
   const baseStyle = { backgroundColor: "#1d4ed8", color: "#fff" };
   const disabledStyle = { opacity: 0.5, cursor: "not-allowed" };
 
   const [isDisabled, setIsDisabled] = useState(false);
   const [buttonLabel, setButtonLabel] = useState("Download");
+  const [isLoading, setIsLoading] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null); // used to refer to the canvas element containing the chart
 
@@ -313,14 +314,15 @@ export default function DownloadOrderListView({
       toast.error("Please select an order", { duration: 1000 });
       return;
     }
+    setIsLoading(true);
+    setButtonLabel("Downloading...");
+    setIsDisabled(true);
     try {
       // Open a blank tab synchronously if previewing to avoid popup blockers
       const shouldPreview = mode !== "download";
       const previewWindow = shouldPreview ? window.open("", "_blank") : null;
 
       const pdfs: any[] = [];
-      setButtonLabel("Downloading..."); // inform user that doc is downloading
-      setIsDisabled(true); // disables button during downloading
 
       await Promise.all(
         selectedOrders.map(async (order: any) => {
@@ -1024,8 +1026,6 @@ export default function DownloadOrderListView({
         const zipBlob = await zip.generateAsync({ type: "blob" });
         saveAs(zipBlob, "quality_control_reports.zip");
         toast.success("ZIP with PDFs downloaded");
-        setIsDisabled(false);
-        setButtonLabel("Download");
       } else {
         // isa lang ka file ang idownload or preview
         // Generate PDF blob for preview
@@ -1047,15 +1047,11 @@ export default function DownloadOrderListView({
             window.open(url, "_blank");
           }
           toast.success("PDF generated for preview");
-          setIsDisabled(false);
-          setButtonLabel("Download");
           return;
         } else if (mode === "download") {
           // Prefer the generated filename, fallback to prop
           doc.save(filename || fileName);
           toast.success("PDF downloaded");
-          setIsDisabled(false);
-          setButtonLabel("Download");
         } else {
           onPDFGenerated?.(pdfBlob);
           const url = URL.createObjectURL(pdfBlob);
@@ -1076,14 +1072,14 @@ export default function DownloadOrderListView({
           a.click();
           document.body.removeChild(a);
           toast.success("PDF generated for preview");
-          setIsDisabled(false);
-          setButtonLabel("Download");
           return;
         }
       }
     } catch (err) {
       console.error("Failed to generate PDF:", err);
       toast.error("Failed to generate PDF");
+    } finally {
+      setIsLoading(false);
       setIsDisabled(false);
       setButtonLabel("Download");
     }
@@ -1106,6 +1102,14 @@ export default function DownloadOrderListView({
         height="210"
         style={{ display: "none" }}
       />
+      {isLoading && (
+        <div className="modal modal-open">
+          <div className="modal-box bg-white text-black flex flex-col items-center gap-4">
+            <span className="loading loading-spinner loading-lg text-primary" aria-hidden="true" />
+            <p className="text-center text-sm font-medium">Preparing reports. Please wait...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
