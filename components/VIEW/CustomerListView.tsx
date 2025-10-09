@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Eye, Pencil, Search } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
+import ImprovedPagination from "../UI/ImprovedPagination";
 
 export default function UserListView() {
   const [page, setPage] = useState(1);
@@ -159,34 +160,14 @@ export default function UserListView() {
           </tfoot>
         </table>
 
-        {/* Pagination */}
-        <div className="flex justify-between gap-4 items-center mx-auto">
-        
-
-          <div className="join">
-            <button
-              onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-              className={`join-item btn ${page === 1 ? "disabled" : ""}`}
-              disabled={page === 1}
-            >
-              «
-            </button>
-            <button className="join-item btn">Page {page}</button>
-            <button
-              onClick={() =>
-                setPage((prev) =>
-                  prev * limit < (data?.total_count || 0) ? prev + 1 : prev
-                )
-              }
-              className={`join-item btn ${
-                page * limit >= (data?.total_count || 0) ? "disabled" : ""
-              }`}
-              disabled={page * limit >= (data?.total_count || 0)}
-            >
-              »
-            </button>
-          </div>
-        </div>
+        {/* Improved Pagination */}
+        <ImprovedPagination
+          currentPage={page}
+          totalCount={data?.total_count || 0}
+          limit={limit}
+          onPageChange={setPage}
+          className="mt-4"
+        />
       </div>
     </div>
   );

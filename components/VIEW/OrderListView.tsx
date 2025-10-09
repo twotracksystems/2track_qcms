@@ -13,6 +13,7 @@ import { DateTime } from "luxon";
 import { start } from "repl";
 import DownloadOrderListView from "./DownloadOrderListView";
 import { read } from "fs";
+import ImprovedPagination from "../UI/ImprovedPagination";
 
 export default function OrderListView() {
   const [page, setPage] = useState(1);
@@ -986,7 +987,7 @@ export default function OrderListView() {
                 type="text"
                 ref={searchInput}
                 className="grow w-full"
-                placeholder="Search OF ID"
+                placeholder="Search"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     const searchValue = searchInput.current?.value || "";
@@ -1125,7 +1126,7 @@ export default function OrderListView() {
               <th>OF ID</th>
               {/* <th>Product Name</th> */}
               <th>Customer Name</th>
-              <th>Product Name</th>
+              <th>Designation</th>
               <th>Pallete Count</th>
               {/* <th>Created Date</th> */}
               <th>Production Entry Date</th>
@@ -1176,8 +1177,8 @@ export default function OrderListView() {
                       : " "}
                   </td>
                   <td>
-                    {order.tbl_article?.article_name
-                      ? order.tbl_article?.article_name
+                    {order.tbl_article?.designated_article
+                      ? order.tbl_article?.designated_article
                       : " "}
                   </td>
                   <td>{order.pallete_count ? order.pallete_count : " "}</td>
@@ -1240,34 +1241,14 @@ export default function OrderListView() {
             </tr>
           </tfoot>
         </table>
-        {/* Pagination */}
-        <div className="flex justify-between gap-4 items-center mx-auto">
-          <div className="join">
-            <button
-              onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-              className={`join-item btn ${page === 1 ? "disabled" : ""}`}
-              disabled={page === 1}
-            >
-              «
-            </button>
-            <button className="join-item btn">Page {page}</button>
-            <button
-              onClick={() =>
-                setPage((prev) =>
-                  prev * limit < (ordersData?.total_count || 0)
-                    ? prev + 1
-                    : prev
-                )
-              }
-              className={`join-item btn ${
-                page * limit >= (ordersData?.total_count || 0) ? "disabled" : ""
-              }`}
-              disabled={page * limit >= (ordersData?.total_count || 0)}
-            >
-              »
-            </button>
-          </div>
-        </div>
+        {/* Improved Pagination */}
+        <ImprovedPagination
+          currentPage={page}
+          totalCount={ordersData?.total_count || 0}
+          limit={limit}
+          onPageChange={setPage}
+          className="mt-4"
+        />
 
         {isModalOpen && (
           <div className="modal modal-open">

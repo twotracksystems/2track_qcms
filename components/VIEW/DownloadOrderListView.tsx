@@ -165,7 +165,9 @@ export default function DownloadOrderListView({
     // returns the descriptive statistics of the order measurements
     const values = data
       .map((d) => d[field])
-      .filter((v): v is number => typeof v === "number" && !isNaN(v));
+      .filter((v): v is number => typeof v === "number" && !isNaN(v) && v !== 0);
+
+    console.log(`calculateStats for ${field}:`, { values, data });
 
     if (values.length === 0) {
       return { mean: 0, min: 0, max: 0, stdDev: 0 };
@@ -180,14 +182,14 @@ export default function DownloadOrderListView({
       values.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / n;
     const stdDev = Math.sqrt(variance);
 
-    // Helper to fix decimals to 2 places
-    const round2 = (num: number) => Number(num.toFixed(4));
+    // Helper to fix decimals to 4 places
+    const round4 = (num: number) => Number(num.toFixed(4));
 
     return {
-      mean: round2(mean),
-      min: round2(min),
-      max: round2(max),
-      stdDev: round2(stdDev),
+      mean: round4(mean),
+      min: round4(min),
+      max: round4(max),
+      stdDev: round4(stdDev),
     };
   }
 
@@ -202,12 +204,39 @@ export default function DownloadOrderListView({
     }
 
     const ctx = canvas.getContext("2d")!;
-    const labels = data.map((d) => String(d.palette_count));
-    const values = data.map((d) => d.data);
+    
+    // Filter out zero values and sort by palette count in ascending order
+    const filteredData = data
+      .filter((d) => d.data !== 0 && d.data !== null && d.data !== undefined && !isNaN(d.data))
+      .sort((a, b) => a.palette_count - b.palette_count);
+    
+    // Recalculate mean based on filtered data
+    const filteredValues = filteredData.map((d) => d.data);
+    const recalculatedMean = filteredValues.length > 0 
+      ? filteredValues.reduce((a, b) => a + b, 0) / filteredValues.length 
+      : meanValue;
+    
+    const labels = filteredData.map((d) => String(d.palette_count));
+    const values = filteredData.map((d) => d.data);
 
-    const minVal = Math.min(...values);
-    const maxVal = Math.max(...values);
-    const padding = (maxVal - minVal) * 0.1; // 10% headroom
+    // Handle single data point case
+    let minVal, maxVal, padding;
+    if (values.length === 1) {
+      // For single point, create a range around the value
+      const singleValue = values[0];
+      minVal = singleValue * 0.8; // 20% below
+      maxVal = singleValue * 1.2;   // 20% above
+      padding = (maxVal - minVal) * 0.1;
+    } else if (values.length === 0) {
+      // No data case
+      minVal = 0;
+      maxVal = 1;
+      padding = 0.1;
+    } else {
+      minVal = Math.min(...values);
+      maxVal = Math.max(...values);
+      padding = (maxVal - minVal) * 0.1; // 10% headroom
+    }
     const chart = new Chart(ctx, {
       type: "line",
       data: {
@@ -219,7 +248,7 @@ export default function DownloadOrderListView({
             backgroundColor: "rgba(29, 78, 216, 0.2)",
             borderWidth: 1,
             tension: 0.3,
-            pointRadius: 1,
+            pointRadius: values.length === 1 ? 4 : 1, // Larger point for single data
           },
           // Mean point dataset
           {
@@ -227,7 +256,7 @@ export default function DownloadOrderListView({
             data: new Array(values.length)
               .fill(null)
               .map((_, i) =>
-                i === Math.floor(values.length / 2) ? meanValue : null
+                i === Math.floor(values.length / 2) ? recalculatedMean : null
               ),
             borderColor: "red",
             backgroundColor: "red",
@@ -288,17 +317,23 @@ export default function DownloadOrderListView({
           afterDraw: (chart) => {
             const yScale = chart.scales.y;
             const ctx = chart.ctx;
-            const y = yScale.getPixelForValue(meanValue);
+            
+            // Ensure we have a valid mean value
+            const meanToUse = isNaN(recalculatedMean) || recalculatedMean === 0 ? meanValue : recalculatedMean;
+            const y = yScale.getPixelForValue(meanToUse);
 
-            ctx.save();
-            ctx.beginPath();
-            ctx.moveTo(chart.chartArea.left, y);
-            ctx.lineTo(chart.chartArea.right, y);
-            ctx.strokeStyle = "red";
-            ctx.lineWidth = 1.5;
-            ctx.setLineDash([5, 5]); // dashed line
-            ctx.stroke();
-            ctx.restore();
+            // Only draw the line if it's within the chart area
+            if (y >= chart.chartArea.top && y <= chart.chartArea.bottom) {
+              ctx.save();
+              ctx.beginPath();
+              ctx.moveTo(chart.chartArea.left, y);
+              ctx.lineTo(chart.chartArea.right, y);
+              ctx.strokeStyle = "red";
+              ctx.lineWidth = 1.5;
+              ctx.setLineDash([5, 5]); // dashed line
+              ctx.stroke();
+              ctx.restore();
+            }
           },
         },
       ],
@@ -354,8 +389,18 @@ export default function DownloadOrderListView({
           const measurementData = await GetMeasurementData(
             get(order.id) as unknown as number
           );
+          
+          console.log("Measurement data:", measurementData);
 
           // fetch customer specifications data
+          console.log("Order data for debugging:", order);
+          console.log("Article data:", order.tbl_article);
+          console.log("Article IDs:", {
+            nominal: order.tbl_article?.article_nominal,
+            min: order.tbl_article?.article_min,
+            max: order.tbl_article?.article_max
+          });
+          
           const customerSpecificationsData =
             await GetCustomerSpecificationsData(
               get(order.tbl_article?.article_nominal) as unknown as number,
@@ -364,9 +409,15 @@ export default function DownloadOrderListView({
             );
 
           // customer specifications data
-          const nominal_data = customerSpecificationsData[0];
-          const max_data = customerSpecificationsData[1];
-          const min_data = customerSpecificationsData[2];
+          const nominal_data = customerSpecificationsData[0] || {};
+          const max_data = customerSpecificationsData[1] || {};
+          const min_data = customerSpecificationsData[2] || {};
+          
+          console.log("Customer specifications data:", {
+            nominal: nominal_data,
+            max: max_data,
+            min: min_data
+          });
 
           // get all the descriptive statistics of the order for each measurement
           const orderLengthStats = calculateStats(measurementData, "length");
@@ -605,16 +656,16 @@ export default function DownloadOrderListView({
 
             // customer specs table is generated BY ROW
             doc.text(
-              String(nominal_data[data] ?? "*"),
+              String(nominal_data[data] ?? "No data"),
               colX2 + specColOtherWidth / 2,
               y,
               {
-                // if data does not exist, put *
+                // if data does not exist, put "No data"
                 align: "center",
               }
             );
             doc.text(
-              String(max_data[data] ?? "*"),
+              String(max_data[data] ?? "No data"),
               colX3 + specColOtherWidth / 2,
               y,
               {
@@ -622,7 +673,7 @@ export default function DownloadOrderListView({
               }
             );
             doc.text(
-              String(min_data[data] ?? "*"),
+              String(min_data[data] ?? "No data"),
               colX4 + specColOtherWidth / 2,
               y,
               {
@@ -841,12 +892,16 @@ export default function DownloadOrderListView({
           // Page 02 start
           doc.addPage();
 
-          // LENGTH DATA
+          // LENGTH DATA - sort by palette count in ascending order
           const lengthData: chartData[] = measurementData // use the length data in the measurements table of the order ID
             .map((lengthInstance: any) => ({
               data: lengthInstance["length"],
               palette_count: Number(lengthInstance["pallete_count"]),
-            }));
+            }))
+            .sort((a: chartData, b: chartData) => a.palette_count - b.palette_count);
+
+          console.log("Length Data for chart:", lengthData);
+          console.log("Length Stats:", orderLengthStats);
 
           const lengthLineChartImage = await generateLineChartImage(
             canvasRef.current!,
@@ -854,12 +909,16 @@ export default function DownloadOrderListView({
             orderLengthStats["mean"]
           ).then();
 
-          // INSIDE DATA
+          // INSIDE DATA - sort by palette count in ascending order
           const insideData: chartData[] = measurementData // use the inside diameter data in the measurements table of the order ID
             .map((insideInstance: any) => ({
               data: insideInstance["inside_diameter"],
               palette_count: Number(insideInstance["pallete_count"]),
-            }));
+            }))
+            .sort((a: chartData, b: chartData) => a.palette_count - b.palette_count);
+
+          console.log("Inside Data for chart:", insideData);
+          console.log("Inside Stats:", orderInsideDiameterStats);
 
           const insideLineChartImage = await generateLineChartImage(
             canvasRef.current!,
@@ -867,12 +926,16 @@ export default function DownloadOrderListView({
             orderInsideDiameterStats["mean"]
           ).then();
 
-          // OUTSIDE DATA
+          // OUTSIDE DATA - sort by palette count in ascending order
           const outsideData: chartData[] = measurementData // use the outside diameter data in the measurements table of the order ID
             .map((outsideInstance: any) => ({
               data: outsideInstance["outside_diameter"],
               palette_count: Number(outsideInstance["pallete_count"]),
-            }));
+            }))
+            .sort((a: chartData, b: chartData) => a.palette_count - b.palette_count);
+
+          console.log("Outside Data for chart:", outsideData);
+          console.log("Outside Stats:", orderOutsideDiameterStats);
 
           const outsideLineChartImage = await generateLineChartImage(
             canvasRef.current!,
@@ -880,12 +943,16 @@ export default function DownloadOrderListView({
             orderOutsideDiameterStats["mean"]
           ).then();
 
-          // FLAT CRUSH DATA
+          // FLAT CRUSH DATA - sort by palette count in ascending order
           const flatCrushData: chartData[] = measurementData // use the flat crush data in the measurements table of the order ID
             .map((flatCrushInstance: any) => ({
               data: flatCrushInstance["flat_crush"],
               palette_count: Number(flatCrushInstance["pallete_count"]),
-            }));
+            }))
+            .sort((a: chartData, b: chartData) => a.palette_count - b.palette_count);
+
+          console.log("Flat Crush Data for chart:", flatCrushData);
+          console.log("Flat Crush Stats:", orderFlatCrushStats);
 
           const flatCrushLineChartImage = await generateLineChartImage(
             canvasRef.current!,
@@ -893,12 +960,16 @@ export default function DownloadOrderListView({
             orderFlatCrushStats["mean"]
           );
 
-          // H2O DATA
+          // H2O DATA - sort by palette count in ascending order
           const h2oData: chartData[] = measurementData // use the h2O data in the measurements table of the order ID
             .map((h2oInstance: any) => ({
               data: h2oInstance["h20"],
               palette_count: Number(h2oInstance["pallete_count"]),
-            }));
+            }))
+            .sort((a: chartData, b: chartData) => a.palette_count - b.palette_count);
+          
+          console.log("H2O Data for chart:", h2oData);
+          console.log("H2O Stats:", orderH2OStats);
 
           const h2oLineChartImage = await generateLineChartImage(
             canvasRef.current!,

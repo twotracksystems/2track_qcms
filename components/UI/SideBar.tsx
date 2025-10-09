@@ -246,7 +246,7 @@ export default function Sidebar({
                       Order Fabrication Management
                     </Link>
                   </li>
-             <li>
+             {/* <li>
               <Link
                 href="/dashboard/production_management"
                 className={`${
@@ -258,7 +258,7 @@ export default function Sidebar({
                 <Boxes color="#000000" />
                 Production Management
               </Link>
-            </li>
+            </li> */}
             {/*<li>
               <Link
                 href="/dashboard/analytical_management"

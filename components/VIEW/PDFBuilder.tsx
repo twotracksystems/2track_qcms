@@ -201,33 +201,63 @@ export function DrawFooter(
 export function WriteH2OBold(doc: jsPDF, x: number, y: number) {
   // Base font size
   doc.setFontSize(12);
+  doc.setFont("times", "bold");
 
   // Write "H"
   doc.text("H", x, y);
 
   // Write "2" smaller and lower (subscript)
   doc.setFontSize(8);
-  doc.text("2", x + 9, y + 2); // adjust x,y offset as needed
+  doc.setFont("times", "bold");
+  doc.text("2", x + 8, y + 2); // adjust x,y offset as needed
 
   // Back to normal for "O"
   doc.setFontSize(12);
-  doc.text("O", x + 13, y);
+  doc.setFont("times", "bold");
+  doc.text("O", x + 12, y);
 }
 
 export function WriteH2OItalic(doc: jsPDF, x: number, y: number) {
   // Base font size
   doc.setFontSize(12);
+  doc.setFont("times", "italic");
 
   // Write "H"
   doc.text("H", x, y);
 
   // Write "2" smaller and lower (subscript)
   doc.setFontSize(8);
+  doc.setFont("times", "italic");
   doc.text("2", x + 7, y + 2); // adjust x,y offset as needed
 
   // Back to normal for "O"
   doc.setFontSize(12);
+  doc.setFont("times", "italic");
   doc.text("O (%)", x + 11, y);
+}
+
+/**
+ * Custom function to render H₂O table header with proper subscript
+ */
+export function renderH2OTableHeader(doc: jsPDF, x: number, y: number, width: number) {
+  // Calculate center position for the header
+  const centerX = x + width / 2;
+  const centerY = y + 6; // Adjust vertical position
+  
+  // Write "H"
+  doc.setFontSize(10);
+  doc.setFont("times", "bolditalic");
+  doc.text("H", centerX - 8, centerY);
+
+  // Write "2" smaller and lower (subscript) - make it more subscript-like
+  doc.setFontSize(6); // Even smaller
+  doc.setFont("times", "bolditalic");
+  doc.text("2", centerX - 1, centerY + 3); // Lower position for proper subscript
+
+  // Back to normal for "O"
+  doc.setFontSize(10);
+  doc.setFont("times", "bolditalic");
+  doc.text("O (%)", centerX + 3, centerY);
 }
 
 type TableHead = string[][];
@@ -250,28 +280,34 @@ export function DrawMeasurementTables(
   const measurementsHead: TableHead = [
     ["Pal Nr", "L (mm)", "Ø in (mm)", "Ø out (mm)", "OK"],
   ];
-  const flatCrushH2oHead: TableHead = [["Flat Crush (kN/dm)", "H₂O (%)"]];
+  const flatCrushH2oHead: TableHead = [["Flat Crush (kN/dm)", "H2O (%)"]];
   const measurementsBody: TableBody = [];
   const flatCrushH2oBody: TableBody = [];
 
-  // Measurements body
-  for (const data of measurementData) {
+  // Measurements body - sort by pallet count in ascending order
+  const sortedMeasurementData = [...measurementData].sort((a, b) => {
+    const palA = Number(a["pallete_count"]) || 0;
+    const palB = Number(b["pallete_count"]) || 0;
+    return palA - palB;
+  });
+
+  for (const data of sortedMeasurementData) {
     const pal = data["pallete_count"];
     if (!pal) continue; // skip empty pallets
     measurementsBody.push([
       pal,
-      data["length"] || "",
-      data["inside_diameter"] || "",
-      data["outside_diameter"] || "",
+      data["length"] || "No data",
+      data["inside_diameter"] || "No data",
+      data["outside_diameter"] || "No data",
       "", // OK column (blank)
     ]);
   }
 
-  // FlatCrush/H2O body (include row if either value exists)
-  for (const data of measurementData) {
+  // FlatCrush/H2O body (include row if either value exists) - also sorted
+  for (const data of sortedMeasurementData) {
     const fc = data["flat_crush"];
     const h2o = data["h20"];
-    if (fc || h2o) flatCrushH2oBody.push([fc || "", h2o || ""]);
+    if (fc || h2o) flatCrushH2oBody.push([fc || "No data", h2o || "No data"]);
   }
 
   // ---------- Page & layout constants ----------
@@ -426,6 +462,23 @@ export function DrawMeasurementTables(
         textColor: "black",
       },
     });
+
+    // Override the H₂O header with proper subscript
+    const at = (doc as any).lastAutoTable;
+    if (at && at.table) {
+      const table = at.table;
+      const headerRow = table.head[0];
+      if (headerRow && headerRow[1]) {
+        // Get the position of the H₂O column (second column)
+        const h2oCell = headerRow[1];
+        if (h2oCell && h2oCell.x !== undefined && h2oCell.y !== undefined) {
+          // Clear the existing text and draw custom H₂O
+          doc.setFillColor(255, 255, 255);
+          doc.rect(h2oCell.x, h2oCell.y, h2oCell.width, h2oCell.height, 'F');
+          renderH2OTableHeader(doc, h2oCell.x, h2oCell.y, h2oCell.width);
+        }
+      }
+    }
   } else {
     // Either we ended in the RIGHT column (so both columns used),
     // or exactly consumed the page. Place FlatCrush/H2O FULL-WIDTH
@@ -486,6 +539,23 @@ export function DrawMeasurementTables(
           textColor: "black",
         },
       });
+
+      // Override the H₂O header with proper subscript
+      const at2 = (doc as any).lastAutoTable;
+      if (at2 && at2.table) {
+        const table = at2.table;
+        const headerRow = table.head[0];
+        if (headerRow && headerRow[1]) {
+          // Get the position of the H₂O column (second column)
+          const h2oCell = headerRow[1];
+          if (h2oCell && h2oCell.x !== undefined && h2oCell.y !== undefined) {
+            // Clear the existing text and draw custom H₂O
+            doc.setFillColor(255, 255, 255);
+            doc.rect(h2oCell.x, h2oCell.y, h2oCell.width, h2oCell.height, 'F');
+            renderH2OTableHeader(doc, h2oCell.x, h2oCell.y, h2oCell.width);
+          }
+        }
+      }
     } else {
       // Same page, full-width directly below the Measurements table
       if (currentPage > doc.getNumberOfPages()) doc.addPage();
@@ -534,6 +604,23 @@ export function DrawMeasurementTables(
           textColor: "black",
         },
       });
+
+      // Override the H₂O header with proper subscript
+      const at3 = (doc as any).lastAutoTable;
+      if (at3 && at3.table) {
+        const table = at3.table;
+        const headerRow = table.head[0];
+        if (headerRow && headerRow[1]) {
+          // Get the position of the H₂O column (second column)
+          const h2oCell = headerRow[1];
+          if (h2oCell && h2oCell.x !== undefined && h2oCell.y !== undefined) {
+            // Clear the existing text and draw custom H₂O
+            doc.setFillColor(255, 255, 255);
+            doc.rect(h2oCell.x, h2oCell.y, h2oCell.width, h2oCell.height, 'F');
+            renderH2OTableHeader(doc, h2oCell.x, h2oCell.y, h2oCell.width);
+          }
+        }
+      }
     }
   }
 }
