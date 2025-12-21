@@ -17,8 +17,10 @@ import * as Yup from "yup";
 import { FormInput, FormSelect } from "../UI/FormInput";
 import { useEffect, useState } from "react";
 import { create } from "domain";
+import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
 export default function EditCustomerList(params: any) {
   const navigator = useRouter();
+  useEscapeNavigation("/dashboard/customer_management");
   const id = params.params;
   const [initialValues, setInitialValues] = useState({
     // firstname: "",

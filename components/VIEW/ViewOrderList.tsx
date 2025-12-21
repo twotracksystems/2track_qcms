@@ -9,9 +9,11 @@ import toast from "react-hot-toast";
 import * as Yup from "yup";
 import { FormSelect } from "../UI/FormInput";
 import { useState, useEffect } from "react";
+import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
 export default function AddOrderList(params:any) {
   
   const router = useRouter();
+  useEscapeNavigation("/dashboard/order_management");
   const id=params.params;
 
   const [initialValues, setInitialValues] = useState({

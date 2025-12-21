@@ -11,9 +11,11 @@ import { FormInput, FormSearchableSelect, FormSelect } from "../UI/FormInput";
 import { useState, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
 import Select from "react-select";
+import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
 export default function AddOrderList(params:any) {
   
   const router = useRouter();
+  useEscapeNavigation("/dashboard/order_management");
   const id=params.params;
 const supabase = createClient(); 
    const [UserRole,setUserRole] = useState<string | null>(null);
@@ -206,199 +208,169 @@ const removeCustomerMutation = useMutation({
 });
 
   return (
-    <div className="flex flex-col w-11/12 mx-auto text-black">
-      <div className="breadcrumbs my-4 text-lg text-slate-600 font-semibold">
-        <ul>
-          <li>
-            <Link href="/dashboard/order_management">Order Management</Link>
-          </li>
-          <li>
-            <span>Edit Order</span>
-          </li>
-        </ul>
-      </div>
-      <div className="flex flex-row justify-end items-center m-4">
-      {/* Remove User Button */}
-      {UserRole === "Super Admin" && (
-  <button
-    type="button"
-    className="btn btn-error btn-md"
-    onClick={() => setIsRemoveModalOpen(true)}
-  >
-        <Trash2 /> Remove Order
-      </button>
-      )}
-</div>
-      <Formik
-        initialValues={initialValues}
-        validationSchema={Add_Order_Validator}
-        enableReinitialize={true}
-        onSubmit={async (e, actions) => {
-          updateUserMutation.mutate(e);
-         
-        }}
-      >
-        {({ errors, touched, values }) => (
-          <Form>
-            <div className="flex flex-col gap-y-6">
-              <div className="border p-12 rounded-md bg-white">
-                <h1 className="text-xl font-bold py-4">Order Details</h1>
-                <div className="grid grid-cols-2 gap-6 w-full">
-                  <div>
-                    <FormInput
-                      tooltip="Enter the order ID"
-                      name="Id"
-                      type="number"
-                      placeholder="Order ID"
-                      label="Order ID"
-                      errors={error ? error : ""}
-                      touched="true" // Adjust as needed
-                      // readonly={true}
-                    />
-                  </div>
-                  {/* <div>
-                    <FormInput
-                    
-                      tooltip="Enter the product name"
-                      name="product_name"
-                      placeholder="Product Name"
-                      label="Product Name"
-                      errors={error ? error : ""}
-                      touched="true" // Adjust as needed
-                    />
-                  </div> */}
-                  <div>
-                    <label className="form-control w-96 max-w-lg">
-                    {/* <FormSelect
-                      tooltip="Select the customer's name from the dropdown"
-                      name="CustomerName"
-                      placeholder="Choose a customer"
-                      label="Customer Name"
-                      options={customerOptions}
-                      errors={error ? error : ""}
-                      touched="true" // Adjust as needed
-                    /> */}
-                   <FormSearchableSelect
-        name="CustomerName"
-        label="Customer Name"
-        placeholder="Choose a customer"
-        tooltip="Select the customer's name from dropdown"
-
-        errors={errors.CustomerName}
-        touched={touched.CustomerName ? "true" :"" }// Adjust as needed
-        options={customerOptions}
-      />
-                    </label>
-                  </div>
-                  <div>
-                    <label className="form-control w-96 max-w-lg">
-                   <FormSearchableSelect
-                              name="ArticleName"
-                              label="ID Article"
-                              placeholder="Choose a product"
-                              tooltip="Select the product name from dropdown"
-                              errors={errors.ArticleName}
-                              touched={touched.ArticleName ? "true" :"" } // Adjust as needed
-                              options={articleOptions}
-                            />
-                    </label>
-
-                  </div>
-
-                  <div>
-                    <label className="form-control w-96 max-w-lg">
-                      <div className="label">
-                        <span className="label-text font-bold gap-x-2 flex flex-row">
-                          Pallete Count
-                          <span
-                            className="tooltip tooltip-right"
-                            data-tip="Enter a pallete count. This is required."
-                          >
-                            <CircleHelp
-                              className=" my-auto"
-                              size={20}
-                              strokeWidth={0.75}
-                            />
-                          </span>
-                        </span>
-                      </div>
-                      <Field
-                        type="text"
-                        placeholder="Site Name: Example: EzMiner"
-                        name="PalleteCount"
-                        className={`input input-bordered w-full max-w-md ${
-                          errors.PalleteCount && touched.PalleteCount
-                            ? "input-error"
-                            : ""
-                        }`}
+    <div className="flex flex-col w-full px-6 py-4 text-black">
+      <div className="flex-1 flex flex-col gap-y-3 h-full min-w-0">
+        <div className="flex flex-row justify-end items-center mb-4">
+          {UserRole === "Super Admin" && (
+            <button
+              type="button"
+              className="px-4 py-2 rounded-lg bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
+              onClick={() => setIsRemoveModalOpen(true)}
+            >
+              <Trash2 className="inline mr-2" size={18} /> Remove Order
+            </button>
+          )}
+        </div>
+        <Formik
+          initialValues={initialValues}
+          validationSchema={Add_Order_Validator}
+          enableReinitialize={true}
+          onSubmit={async (e, actions) => {
+            updateUserMutation.mutate(e);
+          }}
+        >
+          {({ errors, touched, values }) => (
+            <Form>
+              <div className="flex flex-col gap-y-6">
+                <div className="bg-white rounded-2xl shadow-lg border border-blue-200/30 p-8">
+                  <h1 className="text-2xl font-bold py-4 text-gray-800 border-b border-gray-200 pb-4 mb-6">Order Details</h1>
+                  <div className="grid grid-cols-2 gap-6 w-full">
+                    <div>
+                      <FormInput
+                        tooltip="Enter the order ID"
+                        name="Id"
+                        type="number"
+                        placeholder="Order ID"
+                        label="Order ID"
+                        errors={error ? error : ""}
+                        touched="true"
                       />
-                    </label>
+                    </div>
+                    <div>
+                      <label className="form-control w-full">
+                        <FormSearchableSelect
+                          name="CustomerName"
+                          label="Customer Name"
+                          placeholder="Choose a customer"
+                          tooltip="Select the customer's name from dropdown"
+                          errors={errors.CustomerName}
+                          touched={touched.CustomerName ? "true" : ""}
+                          options={customerOptions}
+                        />
+                      </label>
+                    </div>
+                    <div>
+                      <label className="form-control w-full">
+                        <FormSearchableSelect
+                          name="ArticleName"
+                          label="ID Article"
+                          placeholder="Choose a product"
+                          tooltip="Select the product name from dropdown"
+                          errors={errors.ArticleName}
+                          touched={touched.ArticleName ? "true" : ""}
+                          options={articleOptions}
+                        />
+                      </label>
+                    </div>
 
-                    {errors.PalleteCount && touched.PalleteCount ? (
-                      <span className="text-error  flex flex-row">
-                        {errors.PalleteCount}
-                      </span>
-                    ) : null}
+                    <div>
+                      <label className="form-control w-full">
+                        <div className="label">
+                          <span className="label-text font-bold gap-x-2 flex flex-row">
+                            Pallete Count
+                            <span
+                              className="tooltip tooltip-right"
+                              data-tip="Enter a pallete count. This is required."
+                            >
+                              <CircleHelp
+                                className=" my-auto"
+                                size={20}
+                                strokeWidth={0.75}
+                              />
+                            </span>
+                          </span>
+                        </div>
+                        <Field
+                          type="text"
+                          placeholder="Enter Pallete Count"
+                          name="PalleteCount"
+                          className={`input input-bordered w-full ${
+                            errors.PalleteCount && touched.PalleteCount
+                              ? "input-error"
+                              : ""
+                          }`}
+                        />
+                      </label>
+
+                      {errors.PalleteCount && touched.PalleteCount ? (
+                        <span className="text-error flex flex-row text-sm mt-1">
+                          {errors.PalleteCount}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  type="submit"
+                  className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 ${
+                    updateUserMutation.isPending 
+                      ? "bg-gray-400 cursor-not-allowed" 
+                      : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
+                  }`}
+                  disabled={updateUserMutation.isPending}
+                >
+                  {updateUserMutation.isPending ? (
+                    <>
+                      <span className="loading loading-dots loading-sm"></span>{" "}
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      Save
+                    </>
+                  )}
+                </button>
+                <Link
+                  className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold text-sm transition-all duration-300 shadow-sm hover:shadow-md"
+                  href="/dashboard/order_management"
+                >
+                  BACK
+                </Link>
+              </div>
+            </Form>
+          )}
+        </Formik>
+        {isRemoveModalOpen && (
+          <div className="modal modal-open">
+            <div className="modal-box">
+              <h3 className="text-lg font-bold">Confirm Removal</h3>
+              <p>Are you sure you want to remove this order? This action cannot be undone.</p>
+              <div className="modal-action">
+                <button
+                  onClick={() => {
+                    removeCustomerMutation.mutate(
+                      {is_exist: false},
+                    );
+                  }}
+                  className={`btn btn-error ${
+                    removeCustomerMutation.isPending ? "loading" : ""
+                  }`}
+                >
+                  Confirm
+                </button>
+                <button
+                  onClick={() => setIsRemoveModalOpen(false)}
+                  className="btn btn-outline"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
-            <div className="modal-action p-6">
-              <button
-                type="submit"
-                className={`btn btn-primary ${
-                  updateUserMutation.isPending ? "btn-disabled" : "btn-primary"
-                } btn-md`}
-              >
-                {updateUserMutation.isPending ? (
-                  <>
-                    <span className="loading loading-dots loading-sm"></span>{" "}
-                    Editing Site...
-                  </>
-                ) : (
-                  <>
-                   Save
-                  </>
-                )}
-              </button>
-              <Link
-                className="btn btn-accent btn-md "
-                href="/dashboard/order_management"
-              >
-                BACK
-              </Link>
-            </div>
-          </Form>
+          </div>
         )}
-      </Formik>
-      {isRemoveModalOpen && (
-  <div className="modal modal-open">
-    <div className="modal-box">
-      <h3 className="text-lg font-bold">Confirm Removal</h3>
-      <p>Are you sure you want to remove this order? This action cannot be undone.</p>
-      <div className="modal-action">
-        <button
-          onClick={() => {
-            removeCustomerMutation.mutate(
-              {is_exist: false},
-            );
-          }}
-          className={`btn btn-error ${
-            removeCustomerMutation.isPending ? "loading" : ""
-          }`}
-        >
-          Confirm
-        </button>
-        <button
-          onClick={() => setIsRemoveModalOpen(false)}
-          className="btn btn-outline"
-        >
-          Cancel
-        </button>
       </div>
-    </div>
-  </div>
-)}
     </div>
   );
 }

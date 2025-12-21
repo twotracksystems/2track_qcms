@@ -9,9 +9,11 @@ import { useEffect, useState } from "react";
 import { CircleHelp, Pencil, Trash2 } from "lucide-react";
 import { FormInput, FormSelect } from "../UI/FormInput";
 import Link from "next/link";
+import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
 
 export default function EditUserList(params: any) {
   const navigator = useRouter();
+  useEscapeNavigation("/dashboard/user_management");
   const uuid = params.params;
 
   const [initialValues, setInitialValues] = useState({

@@ -9,8 +9,10 @@ import toast from "react-hot-toast";
 import * as Yup from "yup";
 import { FormSelect } from "../UI/FormInput";
 import { useState, useEffect, use } from "react";
+import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
 export default function AddArticleList() {
   const navigator = useRouter();
+  useEscapeNavigation("/dashboard/article_management");
   const [userid, setuserid] = useState<string | null>(null);
   useEffect(() => {
     const userid=localStorage.getItem("userid");
@@ -142,146 +144,140 @@ export default function AddArticleList() {
   }, []);
   
   return (
-    <div className="flex flex-col w-11/12 mx-auto text-black">
-      <div className="breadcrumbs my-4 text-lg text-slate-600 font-semibold">
-        <ul>
-          <li>
-            <Link href="/dashboard/article_management">Article Management</Link>
-          </li>
-          <li>
-            <span>Add Article</span>
-          </li>
-        </ul>
-      </div>
-      <Formik
-        initialValues={initialValues}
-        validationSchema={Add_Article_Validator}
-        enableReinitialize={true}
-        onSubmit={async (e, actions) => {
-          AddArticleMutation.mutate({
-            article_nominal: e.ArticleNominal,
-            article_min: e.ArticleMin,
-            article_max: e.ArticleMax,
-            number_control: e.NumberControl,
-            user_id: userid,
-          });
-        }}
-      >
-        {({ errors, touched, values }) => (
-          <Form>
-            <div className="flex flex-col gap-y-6">
-              <div className="border p-12 rounded-md bg-white">
-                <h1 className="text-xl font-bold py-4">Article Details</h1>
-                <div className="grid grid-cols-3 gap-6 w-full">
-                 
-                  <div>
-                    <FormSelect
-                      tooltip="Select the article nominal's ID from the dropdown"
-                      name="ArticleNominal"
-                      placeholder="Choose a Article Nominal"
-                      label="Article Nominal"
-                      options={articlenominal}
-                      errors={error ? error : ""}
-                      touched="true" // Adjust as needed
-                    />
-                    {isLoading && <p>Loading article...</p>}
-                    {error && <p className="text-red-500">{error}</p>}
-                  </div>
-
-                  <div>
-                    <FormSelect
-                      tooltip="Select the article min's ID from the dropdown"
-                      name="ArticleMin"
-                      placeholder="Choose a Article Min"
-                      label="Article Min"
-                      options={articlemin}
-                      errors={error ? error : ""}
-                      touched="true" // Adjust as needed
-                    />
-                    {isLoading && <p>Loading article...</p>}
-                    {error && <p className="text-red-500">{error}</p>}
-                  </div>
-
-                  <div>
-                    <FormSelect
-                      tooltip="Select the article max's ID from the dropdown"
-                      name="ArticleMax"
-                      placeholder="Choose a Article Max"
-                      label="Article Max"
-                      options={articlemax}
-                      errors={error ? error : ""}
-                      touched="true" // Adjust as needed
-                    />
-                    {isLoading && <p>Loading article...</p>}
-                    {error && <p className="text-red-500">{error}</p>}
-                  </div>
-
-                  <div>
-                    <label className="form-control w-96 max-w-lg">
-                      <div className="label">
-                        <span className="label-text font-bold gap-x-2 flex flex-row">
-                          Number Of Control
-                          <span
-                            className="tooltip tooltip-right"
-                            data-tip="Exit Date Field. This is required."
-                          >
-                            <CircleHelp
-                              className=" my-auto"
-                              size={20}
-                              strokeWidth={0.75}
-                            />
-                          </span>
-                        </span>
-                      </div>
-                      <Field
-                        type="number"
-                        placeholder="Enter Number Of Control"
-                        name="NumberControl"
-                        className={`input input-bordered w-full max-w-md ${
-                          errors.NumberControl && touched.NumberControl
-                            ? "input-error"
-                            : ""
-                        }`}
+    <div className="flex flex-col w-full px-6 py-4 text-black">
+      <div className="flex-1 flex flex-col gap-y-3 h-full min-w-0">
+        <Formik
+          initialValues={initialValues}
+          validationSchema={Add_Article_Validator}
+          enableReinitialize={true}
+          onSubmit={async (e, actions) => {
+            AddArticleMutation.mutate({
+              article_nominal: e.ArticleNominal,
+              article_min: e.ArticleMin,
+              article_max: e.ArticleMax,
+              number_control: e.NumberControl,
+              user_id: userid,
+            });
+          }}
+        >
+          {({ errors, touched, values }) => (
+            <Form>
+              <div className="flex flex-col gap-y-6">
+                <div className="bg-white rounded-2xl shadow-lg border border-blue-200/30 p-8">
+                  <h1 className="text-2xl font-bold py-4 text-gray-800 border-b border-gray-200 pb-4 mb-6">Article Details</h1>
+                  <div className="grid grid-cols-3 gap-6 w-full">
+                    <div>
+                      <FormSelect
+                        tooltip="Select the article nominal's ID from the dropdown"
+                        name="ArticleNominal"
+                        placeholder="Choose a Article Nominal"
+                        label="Article Nominal"
+                        options={articlenominal}
+                        errors={error ? error : ""}
+                        touched="true"
                       />
-                    </label>
+                      {isLoading && <p className="text-sm text-gray-500 mt-2">Loading article...</p>}
+                      {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+                    </div>
 
-                    {errors.NumberControl && touched.NumberControl ? (
-                      <span className="text-error  flex flex-row">
-                        {errors.NumberControl}
-                      </span>
-                    ) : null}
+                    <div>
+                      <FormSelect
+                        tooltip="Select the article min's ID from the dropdown"
+                        name="ArticleMin"
+                        placeholder="Choose a Article Min"
+                        label="Article Min"
+                        options={articlemin}
+                        errors={error ? error : ""}
+                        touched="true"
+                      />
+                      {isLoading && <p className="text-sm text-gray-500 mt-2">Loading article...</p>}
+                      {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+                    </div>
+
+                    <div>
+                      <FormSelect
+                        tooltip="Select the article max's ID from the dropdown"
+                        name="ArticleMax"
+                        placeholder="Choose a Article Max"
+                        label="Article Max"
+                        options={articlemax}
+                        errors={error ? error : ""}
+                        touched="true"
+                      />
+                      {isLoading && <p className="text-sm text-gray-500 mt-2">Loading article...</p>}
+                      {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+                    </div>
+
+                    <div>
+                      <label className="form-control w-full">
+                        <div className="label">
+                          <span className="label-text font-bold gap-x-2 flex flex-row">
+                            Number Of Control
+                            <span
+                              className="tooltip tooltip-right"
+                              data-tip="Exit Date Field. This is required."
+                            >
+                              <CircleHelp
+                                className=" my-auto"
+                                size={20}
+                                strokeWidth={0.75}
+                              />
+                            </span>
+                          </span>
+                        </div>
+                        <Field
+                          type="number"
+                          placeholder="Enter Number Of Control"
+                          name="NumberControl"
+                          className={`input input-bordered w-full ${
+                            errors.NumberControl && touched.NumberControl
+                              ? "input-error"
+                              : ""
+                          }`}
+                        />
+                      </label>
+
+                      {errors.NumberControl && touched.NumberControl ? (
+                        <span className="text-error flex flex-row text-sm mt-1">
+                          {errors.NumberControl}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-            <div className="modal-action p-6">
-              <button
-                type="submit"
-                className={`btn btn-outline ${
-                  AddArticleMutation.isPending ? "btn-disabled" : "btn-primary"
-                } btn-md`}
-              >
-                {AddArticleMutation.isPending ? (
-                  <>
-                    <span className="loading loading-dots loading-sm"></span>{" "}
-                    Adding Article...
-                  </>
-                ) : (
-                  <>
-                    <Plus /> Add Article
-                  </>
-                )}
-              </button>
-              <Link
-                className="btn btn-ghost btn-md "
-                href="/dashboard/article_management"
-              >
-                BACK
-              </Link>
-            </div>
-          </Form>
-        )}
-      </Formik>
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  type="submit"
+                  className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 ${
+                    AddArticleMutation.isPending 
+                      ? "bg-gray-400 cursor-not-allowed" 
+                      : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
+                  }`}
+                  disabled={AddArticleMutation.isPending}
+                >
+                  {AddArticleMutation.isPending ? (
+                    <>
+                      <span className="loading loading-dots loading-sm"></span>{" "}
+                      Adding Article...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="inline mr-2" size={18} /> Add Article
+                    </>
+                  )}
+                </button>
+                <Link
+                  className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold text-sm transition-all duration-300 shadow-sm hover:shadow-md"
+                  href="/dashboard/article_management"
+                >
+                  BACK
+                </Link>
+              </div>
+            </Form>
+          )}
+        </Formik>
+      </div>
     </div>
   );
 }

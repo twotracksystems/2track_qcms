@@ -8,9 +8,11 @@ import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { Pencil } from "lucide-react";
+import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
 
 export default function EditArticleListCopy(params:any) {
   const router = useRouter();
+  useEscapeNavigation("/dashboard/article_management");
   const id = params.params;
 
   const [initialValues,setInitialValues] = useState({ 

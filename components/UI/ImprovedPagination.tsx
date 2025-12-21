@@ -1,7 +1,5 @@
 "use client";
 
-import { useState } from "react";
-
 interface ImprovedPaginationProps {
   currentPage: number;
   totalCount: number;
@@ -45,23 +43,40 @@ export default function ImprovedPagination({
     return null; // Don't show pagination if there's only one page or no pages
   }
 
+  const buttonBase =
+    "px-2 py-1 rounded-lg text-xs font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:cursor-not-allowed min-w-[32px]";
+  const iconButtonBase =
+    "px-2 py-1 rounded-lg text-xs font-bold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:cursor-not-allowed min-w-[32px]";
+
+  const renderPageButton = (page: number) => (
+    <button
+      key={page}
+      onClick={() => onPageChange(page)}
+      className={`${buttonBase} ${
+        currentPage === page
+          ? "bg-blue-600 text-white shadow-md hover:bg-blue-700"
+          : "bg-white text-slate-700 border border-slate-200 hover:bg-blue-50"
+      }`}
+    >
+      {page}
+    </button>
+  );
+
   return (
-    <div className={`flex justify-center items-center gap-2 ${className}`}>
-      <div className="join">
+    <div className={`flex flex-wrap justify-center items-center gap-2 px-2 py-2 ${className}`}>
+      <div className="flex items-center gap-1.5 bg-white/95 border border-slate-200 shadow-sm px-2 py-1.5 rounded-lg backdrop-blur-sm flex-wrap">
         {/* First page button */}
         {visiblePages[0] > 1 && (
           <>
             <button
               onClick={() => onPageChange(1)}
-              className="join-item btn btn-sm"
+              className={`${buttonBase} bg-white text-slate-700 border border-slate-200 hover:bg-blue-50`}
               disabled={currentPage === 1}
             >
               1
             </button>
             {visiblePages[0] > 2 && (
-              <button className="join-item btn btn-sm btn-disabled">
-                ...
-              </button>
+              <div className="px-1 text-slate-400 text-xs font-semibold select-none">…</div>
             )}
           </>
         )}
@@ -69,30 +84,26 @@ export default function ImprovedPagination({
         {/* Previous button */}
         <button
           onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-          className={`join-item btn btn-sm ${currentPage === 1 ? "btn-disabled" : ""}`}
+          className={`${iconButtonBase} ${
+            currentPage === 1
+              ? "bg-slate-100 text-slate-400 border border-slate-200"
+              : "bg-white text-slate-700 border border-slate-200 hover:bg-blue-50"
+          }`}
           disabled={currentPage === 1}
         >
           «
         </button>
 
         {/* Visible page numbers */}
-        {visiblePages.map((page) => (
-          <button
-            key={page}
-            onClick={() => onPageChange(page)}
-            className={`join-item btn btn-sm ${
-              currentPage === page ? "btn-active" : ""
-            }`}
-          >
-            {page}
-          </button>
-        ))}
+        {visiblePages.map(renderPageButton)}
 
         {/* Next button */}
         <button
           onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-          className={`join-item btn btn-sm ${
-            currentPage === totalPages ? "btn-disabled" : ""
+          className={`${iconButtonBase} ${
+            currentPage === totalPages
+              ? "bg-slate-100 text-slate-400 border border-slate-200"
+              : "bg-white text-slate-700 border border-slate-200 hover:bg-blue-50"
           }`}
           disabled={currentPage === totalPages}
         >
@@ -103,24 +114,17 @@ export default function ImprovedPagination({
         {visiblePages[visiblePages.length - 1] < totalPages && (
           <>
             {visiblePages[visiblePages.length - 1] < totalPages - 1 && (
-              <button className="join-item btn btn-sm btn-disabled">
-                ...
-              </button>
+              <div className="px-1 text-slate-400 text-xs font-semibold select-none">…</div>
             )}
             <button
               onClick={() => onPageChange(totalPages)}
-              className="join-item btn btn-sm"
+              className={`${buttonBase} bg-white text-slate-700 border border-slate-200 hover:bg-blue-50`}
               disabled={currentPage === totalPages}
             >
               {totalPages}
             </button>
           </>
         )}
-      </div>
-
-      {/* Page info */}
-      <div className="text-sm text-gray-600 ml-4">
-        Page {currentPage} of {totalPages} ({totalCount} total items)
       </div>
     </div>
   );

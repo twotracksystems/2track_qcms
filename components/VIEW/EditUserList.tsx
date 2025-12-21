@@ -9,9 +9,11 @@ import { useEffect, useState } from "react";
 import { CircleHelp, Pencil, Trash2 } from "lucide-react";
 import { FormInput, FormSelect } from "../UI/FormInput";
 import Link from "next/link";
+import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
 
 export default function EditUserList(params: any) {
   const navigator = useRouter();
+  useEscapeNavigation("/dashboard/user_management");
   const uuid = params.params;
 
   const [initialValues, setInitialValues] = useState({
@@ -176,10 +178,10 @@ export default function EditUserList(params: any) {
       <div className="flex flex-row justify-end items-center m-4">
       {/* Remove User Button */}
       <button
-        className="btn btn-error btn-md"
+        className="px-4 py-2 rounded-lg bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
         onClick={() => setIsRemoveModalOpen(true)}
       >
-        <Trash2 /> Remove User
+        <Trash2 className="inline mr-2" size={18} /> Remove User
       </button>
 </div>
       {/* Edit User Form */}
@@ -294,28 +296,31 @@ export default function EditUserList(params: any) {
          
         </div>
 
-        <div className="modal-action p-6">
+        <div className="flex justify-end gap-3 mt-6">
           <button
             type="submit"
-            className={`btn ${
-              updateUserMutation.isPending ? "btn-disabled" : "btn-primary"
-            } btn-md`}
+            className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 ${
+              updateUserMutation.isPending
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
+            }`}
+            disabled={updateUserMutation.isPending}
           >
             {updateUserMutation.isPending ? (
               <>
                 <span className="loading loading-dots loading-sm"></span>{" "}
-                Editing Site...
+                Saving...
               </>
             ) : (
               <>
-                <Pencil /> EDIT USER
+                <Pencil className="inline mr-2" size={18} /> EDIT USER
               </>
             )}
           </button>
           <button
             type="button"
             onClick={() => navigator.push("/dashboard/user_management")}
-            className="btn btn-accent btn-md"
+            className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold text-sm transition-all duration-300 shadow-sm hover:shadow-md"
           >
             BACK
           </button>

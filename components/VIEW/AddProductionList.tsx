@@ -10,8 +10,11 @@ import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import * as Yup from "yup";
 
+import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
+
 export default function AddProductionList() {
   const navigator = useRouter();
+  useEscapeNavigation("/dashboard/production_management");
   const [assignId, setAssignId] = useState("");
   const [page, setPage] = useState(1);
   const searchInput = useRef<HTMLInputElement>(null);

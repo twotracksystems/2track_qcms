@@ -6,7 +6,6 @@ export const metadata: Metadata = {
   description: "Quality Control Management System",
 };
 
-import IndexHeader from "@/components/UI/IndexHeader";
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -14,9 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="bg-base-200 overflow-x-hidden" data-theme="light">
-      <body>
-        <IndexHeader />
-        {children}</body>
+      <body>{children}</body>
     </html>
   );
 }

@@ -40,7 +40,11 @@ export async function updateSession(request: NextRequest) {
   if (
     !user &&
     !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/api/authentication")
+    !request.nextUrl.pathname.startsWith("/api/authentication") &&
+    !request.nextUrl.pathname.startsWith("/api/v1/test_production_by_ofid") &&
+    !request.nextUrl.pathname.startsWith("/api/v1/test_resolve_by_ofid") &&
+    !request.nextUrl.pathname.startsWith("/api/v1/test_supabase") &&
+    !request.nextUrl.pathname.startsWith("/api/v1/resolve_designated_article")
   ) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone();

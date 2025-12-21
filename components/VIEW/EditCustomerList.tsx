@@ -17,8 +17,10 @@ import * as Yup from "yup";
 import { FormInput, FormSelect } from "../UI/FormInput";
 import { useEffect, useState } from "react";
 import { create } from "domain";
+import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
 export default function EditCustomerList(params: any) {
   const navigator = useRouter();
+  useEscapeNavigation("/dashboard/customer_management");
   const id = params.params;
   const [initialValues, setInitialValues] = useState({
     // firstname: "",
@@ -146,13 +148,12 @@ export default function EditCustomerList(params: any) {
           </li>
         </ul>
       </div>
-      <div className="flex flex-row justify-end items-center m-4">
-        {/* Remove User Button */}
+      <div className="flex flex-row justify-end items-center mb-4">
         <button
-          className="btn btn-error btn-md"
+          className="px-4 py-2 rounded-lg bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
           onClick={() => setIsRemoveModalOpen(true)}
         >
-          <Trash2 /> Remove Customer
+          <Trash2 className="inline mr-2" size={18} /> Remove Customer
         </button>
       </div>
       <Formik
@@ -196,34 +197,36 @@ export default function EditCustomerList(params: any) {
                     </label>
                   </div>
                 </div>
-              </div>  <div className="modal-action p-6">
-              <button
-                type="submit"
-                className={`btn ${
-                  updateCustomerMutation.isPending
-                    ? "btn-disabled"
-                    : "btn-primary"
-                } btn-md`}
-              >
-                {updateCustomerMutation.isPending ? (
-                  <>
-                    <span className="loading loading-dots loading-sm"></span>{" "}
-                    Editing Site...
-                  </>
-                ) : (
-                  <>
-                  Save Customer
-                  </>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => navigator.push("/dashboard/customer_management")}
-                className="btn btn-accent btn-md"
-              >
-                BACK
-              </button>
-            </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  type="submit"
+                  className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 ${
+                    updateCustomerMutation.isPending
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
+                  }`}
+                  disabled={updateCustomerMutation.isPending}
+                >
+                  {updateCustomerMutation.isPending ? (
+                    <>
+                      <span className="loading loading-dots loading-sm"></span>{" "}
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      Save Customer
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigator.push("/dashboard/customer_management")}
+                  className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold text-sm transition-all duration-300 shadow-sm hover:shadow-md"
+                >
+                  BACK
+                </button>
+              </div>
             </div>
           
           </Form>

@@ -8,8 +8,10 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import * as Yup from "yup";
 import { useState, useEffect, use } from "react";
+import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
 export default function AddArticleMaxList() {
   const navigator = useRouter();
+  useEscapeNavigation("/dashboard/article_max_management");
   const [userid, setuserid] = useState<string | null>(null);
   useEffect(() => {
     const userid=localStorage.getItem("userid");

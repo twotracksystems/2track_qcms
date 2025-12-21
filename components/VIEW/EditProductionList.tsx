@@ -10,8 +10,11 @@ import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import * as Yup from "yup";
 
+import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
+
 export default function EditProductionList(params: any) {
   const navigator = useRouter();
+  useEscapeNavigation("/dashboard/production_management");
   const [assignId, setAssignId] = useState("");
   const [page, setPage] = useState(1);
   const searchInput = useRef<HTMLInputElement>(null);
@@ -239,16 +242,15 @@ const [isRemoveModalOpen, setIsRemoveModalOpen] = useState(false);
                 </div>
               </div>
             </div>
-            <div className="modal-action p-6">
+            <div className="flex justify-end gap-3 mt-6">
               <button
                 type="submit"
-                className="btn btn-primary btn-md flex items-center"
-               
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 flex items-center"
               >
-                <Pencil className="mr-2" /> Edit Production
+                <Pencil className="mr-2" size={18} /> Edit Production
               </button>
               <Link
-                className="btn btn-accent"
+                className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold text-sm transition-all duration-300 shadow-sm hover:shadow-md"
                 href="/dashboard/production_management"
               >
                 BACK
@@ -286,7 +288,7 @@ const [isRemoveModalOpen, setIsRemoveModalOpen] = useState(false);
               </button>
               <button
                 onClick={() => setIsRemoveModalOpen(false)}
-                className="btn btn-accent"
+                className="btn btn-outline"
               >
                 Cancel
               </button>

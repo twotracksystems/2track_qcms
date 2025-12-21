@@ -9,8 +9,10 @@ import toast from "react-hot-toast";
 import * as Yup from "yup";
 import { useEffect, useState } from "react";
 import { FormInput } from "../UI/FormInput";
+import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
 export default function AddCustomerList() {
   const navigator = useRouter();
+  useEscapeNavigation("/dashboard/customer_management");
 
   const { data, isLoading, isError, isSuccess } = useQuery({
     queryKey: ["get_customer"],
@@ -95,107 +97,89 @@ export default function AddCustomerList() {
   });
 
   return (
-    <div className="flex flex-col w-11/12 mx-auto bg-base-200 text-black">
-      <div className="breadcrumbs my-4 text-lg text-slate-600 font-semibold">
-        <ul>
-          <li>
-            <Link href="/dashboard/customer_management">
-              Customer Management
-            </Link>
-          </li>
-          <li>
-            <span>Add Customer</span>
-          </li>
-        </ul>
-      </div>
-      <Formik
-        initialValues={{
-          // firstname: "",
-          // middlename: "",
-          // lastname: "",
-          // email: "",
-          // customer_id: isLoading?"Retrieving latest Customer ID...":parseInt(data?.data[0].id||0) + 1,
-          customer_id:"",
-          company_name: "",
-        }}
-        enableReinitialize={true}
-        validationSchema={Add_Customer_Validator}
-        onSubmit={async (e, actions) => {
-          AddCustomerMutaion.mutate({
-            // first_name: e.firstname,
-            // middle_name: e.middlename,
-            // last_name: e.lastname,
-            // email: e.email,
-            company_name: e.company_name,
-            customer_id: e.customer_id,
-          });
-        }}
-      >
-        {({ errors, touched, values }) => (
-          <Form>
-            <div className="flex flex-col gap-y-6">
-              <div className="border p-12 rounded-md bg-white">
-                <h1 className="text-xl font-bold py-4">Customer Details</h1>
-                <div className="grid lg:grid-cols-2 gap-6 w-full place-content-center grid-cols-1">
-                <div>
-                    <label className="form-control w-96 max-w-lg">
-                      <FormInput
-                        tooltip="Input of Customer ID. This is required."
-                        name="customer_id"
-                        placeholder="Enter Customer ID"
-                        label="Customer ID"
-                        errors={errors.customer_id ? errors.customer_id : ""}
-                        touched={touched.customer_id ? "true" : ""}
-                        type="text"
-                        // readonly={true}
-                      />
-                    </label>
+    <div className="flex flex-col w-full px-6 py-4 text-black">
+      <div className="flex-1 flex flex-col gap-y-3 h-full min-w-0">
+        <Formik
+          initialValues={{
+            customer_id:"",
+            company_name: "",
+          }}
+          enableReinitialize={true}
+          validationSchema={Add_Customer_Validator}
+          onSubmit={async (e, actions) => {
+            AddCustomerMutaion.mutate({
+              company_name: e.company_name,
+              customer_id: e.customer_id,
+            });
+          }}
+        >
+          {({ errors, touched, values }) => (
+            <Form>
+              <div className="flex flex-col gap-y-6">
+                <div className="bg-white rounded-2xl shadow-lg border border-blue-200/30 p-8">
+                  <h1 className="text-2xl font-bold py-4 text-gray-800 border-b border-gray-200 pb-4 mb-6">Customer Details</h1>
+                  <div className="grid lg:grid-cols-2 gap-6 w-full">
+                    <div>
+                      <label className="form-control w-full">
+                        <FormInput
+                          tooltip="Input of Customer ID. This is required."
+                          name="customer_id"
+                          placeholder="Enter Customer ID"
+                          label="Customer ID"
+                          errors={errors.customer_id ? errors.customer_id : ""}
+                          touched={touched.customer_id ? "true" : ""}
+                          type="text"
+                        />
+                      </label>
+                    </div>
+                    <div>
+                      <label className="form-control w-full">
+                        <FormInput
+                          tooltip="Input of the Company Name. This is required."
+                          name="company_name"
+                          placeholder="Enter a Company Name"
+                          label="Company Name"
+                          errors={errors.company_name ? errors.company_name : ""}
+                          touched={touched.company_name ? "true" : ""}
+                        />
+                      </label>
+                    </div>
                   </div>
-                  <div>
-                    <label className="form-control w-96 max-w-lg">
-                      <FormInput
-                        tooltip="Input of the Company Name. This is required."
-                        name="company_name"
-                        placeholder="Enter a Company Name"
-                        label="Company Name"
-                        errors={errors.company_name ? errors.company_name : ""}
-                        touched={touched.company_name ? "true" : ""}
-                      />
-                    </label>
-                  </div>
-                 
                 </div>
               </div>
-            </div>
-            <div className="modal-action p-6">
-              <button
-                type="submit"
-                className={`btn  ${
-                  AddCustomerMutaion.isPending ? "btn-disabled" : "btn-primary"
-                } btn-md`}
-              >
-                {AddCustomerMutaion.isPending ? (
-                  <>
-                    <span className="loading loading-dots loading-sm"></span>{" "}
-                    Adding Customer...
-                  </>
-                ) : (
-                  <>
-                    ADD CUSTOMER
-                  </>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => navigator.push("/dashboard/customer_management")}
-                className="btn btn-accent btn-md"
-              >
-                BACK
-              </button>
-            </div>
-          </Form>
-        )}
-      </Formik>
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  type="submit"
+                  className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 ${
+                    AddCustomerMutaion.isPending 
+                      ? "bg-gray-400 cursor-not-allowed" 
+                      : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
+                  }`}
+                  disabled={AddCustomerMutaion.isPending}
+                >
+                  {AddCustomerMutaion.isPending ? (
+                    <>
+                      <span className="loading loading-dots loading-sm"></span>{" "}
+                      Adding Customer...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="inline mr-2" size={18} /> ADD CUSTOMER
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigator.push("/dashboard/customer_management")}
+                  className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold text-sm transition-all duration-300 shadow-sm hover:shadow-md"
+                >
+                  BACK
+                </button>
+              </div>
+            </Form>
+          )}
+        </Formik>
+      </div>
     </div>
   );
 }

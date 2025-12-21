@@ -10,8 +10,10 @@ import * as Yup from "yup";
 import { FormSelect } from "../UI/FormInput";
 import { useState, useEffect } from "react";
 import Order from "@/app/dashboard/laboratory_management/page";
+import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
 export default function AddOrderList(params: any) {
   const navigator = useRouter();
+  useEscapeNavigation("/dashboard/order_management");
   const [userid, setuserid] = useState<string | null>(null);
   useEffect(() => {
     const userid=localStorage.getItem("userid");

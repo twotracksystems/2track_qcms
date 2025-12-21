@@ -11,8 +11,10 @@ import { FormSelect, FormTextArea } from "../UI/FormInput";
 import { useState, useEffect, use } from "react";
 import Order from "@/app/dashboard/laboratory_management/page";
 import AddOrder from "@/app/dashboard/addorder/page";
+import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
 export default function AddOrderList() {
   const navigator = useRouter();
+  useEscapeNavigation("/dashboard/measurement_management");
   const [userid, setuserid] = useState<string | null>(null);
   useEffect(() => {
     const userid = localStorage.getItem("userid");

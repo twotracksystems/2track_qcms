@@ -968,287 +968,255 @@ export default function OrderListView() {
   });
 
   return (
-    <div className="overflow-x-auto mt-4 w-11/12 mx-auto text-black">
-      <div className="breadcrumbs my-4 text-lg text-slate-600 font-semibold">
-        <ul>
-          <li>
-            <Link href="/"> </Link>
-          </li>
-          <li>
-            <span>Order Fabrication Management</span>
-          </li>
-        </ul>
-      </div>
-      <div className="w-11/12 flex flex-col mx-auto gap-y-12 h-full">
-        <div className="w-full flex flex-row justify-between items-center">
-          <div className="flex gap-4">
-            <label className="input mt-auto pr-0 input-bordered flex flex-row justify-center items-center">
+    <div className="overflow-x-auto w-full text-black">
+      <div className="flex-1 flex flex-col gap-y-3 h-full min-w-0 px-6 py-4">
+        <div className="w-full flex flex-nowrap gap-3 items-end bg-gradient-to-br from-blue-50/30 to-blue-100/20 p-4 rounded-xl shadow-lg border border-blue-200/30 overflow-x-auto backdrop-blur-sm">
+          {/* Search Bar - Pill Shape Design */}
+          <div className="flex-1 min-w-[180px]">
+            <div className="relative">
               <input
                 type="text"
                 ref={searchInput}
-                className="grow w-full"
-                placeholder="Search"
+                className="w-full px-4 py-2.5 pr-10 rounded-full bg-white text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all duration-300 shadow-md hover:shadow-lg"
+                placeholder="Search OF ID, Company, or Designation"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     const searchValue = searchInput.current?.value || "";
-                    console.log("Search Triggered:", searchValue); // Debug
+                    console.log("Search Triggered:", searchValue);
                     setSearch(searchValue);
-                    setPage(1); // Reset to page 1
+                    setPage(1);
                   }
                 }}
               />
-
               <button
                 onClick={() => {
                   setSearch(searchInput.current?.value || "");
                   setPage(1);
                 }}
-                className="btn btn-sm h-full drop-shadow-2xl flex items-center gap-2"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-blue-900 transition-colors duration-200"
               >
-                <Search color="#000000" /> Search
-              </button>
-            </label>
-            {/* <div className="flex flex-col">
-              <label className="text-black">Order By: </label>
-              <select
-                className="select select-bordered w-full max-w-xs"
-                value={order}
-                onChange={(e) => setOrder(e.target.value)}
-              >
-                <option value="Order">Order</option>
-                <option value="Ascending">Ascending</option>
-                <option value="Descending">Descending</option>
-              </select>
-            </div> */}
-            {/* <div className="flex flex-col">
-              <label className="text-black">Sort By: </label>
-              <select
-                className="select select-bordered w-full max-w-xs"
-                value={sort_by}
-                onChange={(e) => setSort_by(e.target.value)}
-              >
-                <option value="Sort By">Sort By</option>
-                <option value="order_fabrication_control">
-                  Order Fabrication ID
-                </option>
-                <option value="product_name">Product Name</option>
-                <option value="created_at">Created Date</option>
-                <option value="pallete_count"></option>
-              </select>
-            </div> */}
-            <div className="flex flex-col">
-              <label className="text-black">Start Date: </label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="input input-bordered"
-                placeholder="Start Date"
-              />
-            </div>
-            <div className="flex flex-col">
-              <label className="text-black">End Date: </label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="input input-bordered"
-                placeholder="End Date"
-              />
-            </div>
-            <div className="flex flex-col">
-              <label className="text-black invisible">End Date: </label>
-              <Link
-                href="/dashboard/addorder"
-                className="btn my-auto btn-primary"
-              >
-                Add Order
-              </Link>
-            </div>
-            <div className="flex flex-col">
-              <label className="text-black invisible">End Date: </label>
-              <button
-                className="btn my-auto btn-info"
-                onClick={() => {
-                  setStartDate("");
-                  setEndDate("");
-                  // setOrder("Order");
-                  // setSort_by("Sort By");
-                  setSearch("");
-                  setPage(1);
-                  if (searchInput.current) {
-                    searchInput.current.value = "";
-                  }
-                }}
-              >
-                Refresh
+                <Search className="h-4 w-4" />
               </button>
             </div>
-            <div className="flex flex-col">
-              <label className="text-black invisible">End Date: </label>
-              <DownloadOrderListView
-                className="my-auto"
-                selectedOrders={selectedOrders}
-              />
-            </div>
+          </div>
 
-            {/* <button
-    onClick={() => {
-      setSearch(searchInput.current?.value || "");
-      setPage(1);
-    }}
-    className="btn btn-sm btn-primary"
-  >
-    Search
-  </button> */}
+          {/* Start Date */}
+          <div className="flex flex-col min-w-[120px] shrink-0">
+            <label className="text-[10px] font-semibold text-blue-700 mb-1 uppercase tracking-wide">Start Date:</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="px-2.5 py-2 rounded-lg border border-blue-200/60 bg-white text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 shadow-md hover:shadow-lg transition-all duration-300 font-medium"
+            />
+          </div>
+
+          {/* End Date */}
+          <div className="flex flex-col min-w-[120px] shrink-0">
+            <label className="text-[10px] font-semibold text-blue-700 mb-1 uppercase tracking-wide">End Date:</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="px-2.5 py-2 rounded-lg border border-blue-200/60 bg-white text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50 shadow-md hover:shadow-lg transition-all duration-300 font-medium"
+            />
+          </div>
+
+          {/* Add Order Button */}
+          <Link
+            href="/dashboard/addorder"
+            className="px-3 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs transition-all duration-300 shadow-md hover:shadow-lg shrink-0 whitespace-nowrap transform hover:scale-105 active:scale-95 border border-blue-500/20"
+          >
+            Add Order
+          </Link>
+
+          {/* Refresh Button */}
+          {/* <button
+            onClick={() => {
+              setStartDate("");
+              setEndDate("");
+              setSearch("");
+              setPage(1);
+              if (searchInput.current) {
+                searchInput.current.value = "";
+              }
+            }}
+            className="px-3 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold text-xs transition-all duration-300 shadow-md hover:shadow-lg shrink-0 whitespace-nowrap transform hover:scale-105 active:scale-95 border border-blue-400/20"
+          >
+            Refresh
+          </button> */}
+
+          {/* Download Button */}
+          <div className="min-w-[90px] shrink-0">
+            <DownloadOrderListView
+              className="w-full"
+              selectedOrders={selectedOrders}
+            />
           </div>
         </div>
 
-        <table className="table text-center">
-          <thead>
-            <tr>
-              <th>
-                <input
-                  ref={selectAllRef}
-                  type="checkbox"
-                  className="checkbox checkbox-primary"
-                  checked={(() => {
-                    const rows: any[] = Array.isArray(ordersData?.data)
-                      ? ordersData!.data
-                      : [];
-                    if (!rows.length) return false;
-                    const pageIds = rows.map((r: any) => String(r.id));
-                    return pageIds.every((id) => selectedIds.includes(id));
-                  })()}
-                  onChange={toggleSelectAll}
-                />
-              </th>
-              <th>OF ID</th>
-              {/* <th>Product Name</th> */}
-              <th>Customer Name</th>
-              <th>Designation</th>
-              <th>Pallete Count</th>
-              {/* <th>Created Date</th> */}
-              <th>Production Entry Date</th>
-              <th>Production Exit Date</th>
-              <th>OPTIONS</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading || isFetching ? (
-              <tr>
-                <td colSpan={8}>
-                  <span className="loading loading-dots loading-md"></span>
-                </td>
-              </tr>
-            ) : isError ? (
-              <tr>
-                <td className="text-error font-bold" colSpan={8}>
-                  Something went wrong while fetching orders list.
-                </td>
-              </tr>
-            ) : ordersData?.data?.length > 0 ? (
-              ordersData.data.map((order: any, index: number) => (
-                <tr key={index}>
-                  <td>
+        <div className="bg-white rounded-2xl shadow-lg border border-blue-200/30 overflow-hidden">
+          <div className="overflow-y-visible">
+            <table className="w-full text-center table-auto">
+              <thead>
+                <tr className="bg-gradient-to-r from-blue-900 to-blue-800 text-white">
+                  <th className="px-2 py-2.5 font-bold text-xs uppercase tracking-wide whitespace-nowrap w-12">
                     <input
+                      ref={selectAllRef}
                       type="checkbox"
-                      className="checkbox checkbox-primary"
-                      checked={selectedIds.includes(String(order.id))}
-                      onChange={() => toggleSelectOne(String(order.id))}
+                      className="checkbox border-white/50 bg-white/10 checked:bg-blue-900 checked:border-blue-900 checkbox-sm"
+                      checked={(() => {
+                        const rows: any[] = Array.isArray(ordersData?.data)
+                          ? ordersData!.data
+                          : [];
+                        if (!rows.length) return false;
+                        const pageIds = rows.map((r: any) => String(r.id));
+                        return pageIds.every((id) => selectedIds.includes(id));
+                      })()}
+                      onChange={toggleSelectAll}
                     />
-                  </td>
-                  <td
-                    className="text-xs hover:text-orange-500 hover:cursor-pointer"
-                    onClick={() => {
-                      setIsModalOpen(true);
-                      setOrderid(order.id);
-                      setOrderformdisplay(order.order_fabrication_control);
-                      setNumberControl(3);
-                      setFilterPalleteCount(order.pallete_count);
-                    }}
-                  >
-                    {order.order_fabrication_control}
-                  </td>
-                  {/* <td>{order.product_name ? order.product_name: " "}</td> */}
-                  <td>
-                    {order.tbl_customer?.company_name
-                      ? order.tbl_customer?.company_name
-                      : " "}
-                  </td>
-                  <td>
-                    {order.tbl_article?.designated_article
-                      ? order.tbl_article?.designated_article
-                      : " "}
-                  </td>
-                  <td>{order.pallete_count ? order.pallete_count : " "}</td>
-                  <td>
-                    {order.entry_date_time
-                      ? DateTime.fromISO(order.entry_date_time, {
-                          zone: "utc",
-                        }).toFormat("dd/MM/yy hh:mm a")
-                      : " "}
-                  </td>
-                  <td>
-                    {order.exit_date_time
-                      ? DateTime.fromISO(order.exit_date_time, {
-                          zone: "utc",
-                        }).toFormat("dd/MM/yy hh:mm a")
-                      : " "}
-                  </td>
-
-                  <td className="justify-center items-center flex gap-4">
-                    {userRole === "Super Admin" && (
-                      <button
-                        className="btn btn-info"
+                  </th>
+                  <th className="px-2 py-2.5 font-bold text-xs uppercase tracking-wide whitespace-nowrap">OF ID</th>
+                  <th className="px-2 py-2.5 font-bold text-xs uppercase tracking-wide whitespace-nowrap">Company</th>
+                  <th className="px-2 py-2.5 font-bold text-xs uppercase tracking-wide whitespace-nowrap">Article</th>
+                  <th className="px-2 py-2.5 font-bold text-xs uppercase tracking-wide">Designation</th>
+                  <th className="px-2 py-2.5 font-bold text-xs uppercase tracking-wide whitespace-nowrap w-16">Pallete</th>
+                  <th className="px-2 py-2.5 font-bold text-xs uppercase tracking-wide whitespace-nowrap">Entry Date</th>
+                  <th className="px-2 py-2.5 font-bold text-xs uppercase tracking-wide whitespace-nowrap">Exit Date</th>
+                  <th className="px-2 py-2.5 font-bold text-xs uppercase tracking-wide whitespace-nowrap w-24">OPTIONS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200/50">
+                {isLoading || isFetching ? (
+                  <tr>
+                    <td colSpan={9} className="px-4 py-12">
+                      <div className="flex justify-center items-center">
+                        <span className="loading loading-dots loading-md text-blue-900"></span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : isError ? (
+                  <tr>
+                    <td className="px-4 py-8 text-red-600 font-bold" colSpan={9}>
+                      Something went wrong while fetching orders list.
+                    </td>
+                  </tr>
+                ) : ordersData?.data?.length > 0 ? (
+                  ordersData.data.map((order: any, index: number) => (
+                    <tr 
+                      key={index}
+                      className="hover:bg-blue-50/50 transition-colors duration-200 border-b border-gray-100"
+                    >
+                      <td className="px-2 py-2.5">
+                        <input
+                          type="checkbox"
+                          className="checkbox border-blue-300 checked:bg-blue-900 checked:border-blue-900 checkbox-sm"
+                          checked={selectedIds.includes(String(order.id))}
+                          onChange={() => toggleSelectOne(String(order.id))}
+                        />
+                      </td>
+                      <td
+                        className="px-2 py-2.5 text-xs font-medium text-blue-700 hover:text-blue-900 hover:cursor-pointer transition-colors duration-200 whitespace-nowrap"
                         onClick={() => {
-                          setAssignModal(true);
+                          setIsModalOpen(true);
                           setOrderid(order.id);
+                          setOrderformdisplay(order.order_fabrication_control);
+                          setNumberControl(3);
+                          setFilterPalleteCount(order.pallete_count);
                         }}
                       >
-                        Assign
-                      </button>
-                    )}
-                    <Link
-                      href={`/dashboard/editorder/${order.id}`}
-                      className="link flex"
-                    >
-                      <Pencil className="text-warning" /> Edit
-                    </Link>
+                        {order.order_fabrication_control}
+                      </td>
+                      <td className="px-2 py-2.5 text-xs text-gray-700 whitespace-nowrap">
+                        {order.tbl_customer?.company_name
+                          ? order.tbl_customer?.company_name
+                          : " "}
+                      </td>
+                      <td className="px-2 py-2.5 text-xs text-gray-700 whitespace-nowrap">
+                        {order.tbl_article?.article_name
+                          ? order.tbl_article?.article_name
+                          : " "}
+                      </td>
+                      <td className="px-2 py-2.5 text-xs text-gray-700 whitespace-nowrap">
+                        {order.tbl_article?.designated_article
+                          ? order.tbl_article?.designated_article
+                          : " "}
+                      </td>
+                      <td className="px-2 py-2.5 text-xs font-medium text-gray-700 whitespace-nowrap">
+                        {order.pallete_count ? order.pallete_count : " "}
+                      </td>
+                      <td className="px-2 py-2.5 text-xs text-gray-600 whitespace-nowrap">
+                        {order.entry_date_time
+                          ? DateTime.fromISO(order.entry_date_time, {
+                              zone: "utc",
+                            }).toFormat("dd/MM/yy hh:mm a")
+                          : " "}
+                      </td>
+                      <td className="px-2 py-2.5 text-xs text-gray-600 whitespace-nowrap">
+                        {order.exit_date_time
+                          ? DateTime.fromISO(order.exit_date_time, {
+                              zone: "utc",
+                            }).toFormat("dd/MM/yy hh:mm a")
+                          : " "}
+                      </td>
+                      <td className="px-2 py-2.5">
+                        <div className="flex justify-center items-center gap-2">
+                          {userRole === "Super Admin" && (
+                            <button
+                              className="px-2 py-1 rounded-md bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold text-[10px] transition-all duration-300 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95"
+                              onClick={() => {
+                                setAssignModal(true);
+                                setOrderid(order.id);
+                              }}
+                            >
+                              Assign
+                            </button>
+                          )}
+                          <Link
+                            href={`/dashboard/editorder/${order.id}`}
+                            className="flex items-center gap-1 px-2 py-1 rounded-md bg-gradient-to-r from-blue-400 to-blue-500 hover:from-blue-500 hover:to-blue-600 text-white font-semibold text-[10px] transition-all duration-300 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95"
+                          >
+                            <Pencil className="h-3 w-3" /> Edit
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="px-4 py-8 font-bold text-gray-500" colSpan={9}>
+                      NO DATA FOUND.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              <tfoot>
+                <tr className="bg-gradient-to-r from-blue-50 to-blue-100/50 border-t-2 border-blue-200/50">
+                  <td colSpan={9} className="px-4 py-2.5">
+                    <span className="text-xs font-medium text-blue-900">
+                      {ordersData?.total_count
+                        ? `${(page - 1) * limit + 1}-${Math.min(
+                            page * limit,
+                            ordersData.total_count
+                          )} of ${ordersData.total_count} Order Fabrication Found`
+                        : "No Results"}
+                    </span>
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td className="font-bold" colSpan={8}>
-                  NO DATA FOUND.
-                </td>
-              </tr>
-            )}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colSpan={8}>
-                <span className="text-xs">
-                  {ordersData?.total_count
-                    ? `${(page - 1) * limit + 1}-${Math.min(
-                        page * limit,
-                        ordersData.total_count
-                      )} of ${ordersData.total_count} Order Fabrication Found`
-                    : "No Results"}
-                </span>
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+              </tfoot>
+            </table>
+          </div>
+        </div>
         {/* Improved Pagination */}
-        <ImprovedPagination
-          currentPage={page}
-          totalCount={ordersData?.total_count || 0}
-          limit={limit}
-          onPageChange={setPage}
-          className="mt-4"
-        />
+        <div className="mt-2 pb-2 overflow-x-auto">
+          <ImprovedPagination
+            currentPage={page}
+            totalCount={ordersData?.total_count || 0}
+            limit={limit}
+            onPageChange={setPage}
+            className=""
+          />
+        </div>
 
         {isModalOpen && (
           <div className="modal modal-open">
@@ -1300,18 +1268,18 @@ export default function OrderListView() {
                               name="rows"
                               render={(arrayHelpers) => (
                                 <div>
-                                  <div className="flex place-content-end gap-3">
+                                  <div className="flex justify-end gap-3 mb-4">
                                     {retrievedentryDateTime === null &&
                                     retrievedexitDateTime === null ? (
                                       <button
-                                        className="btn btn-primary"
+                                        className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
                                         type="submit"
                                       >
                                         Save Production
                                       </button>
                                     ) : null}
                                     <button
-                                      className="btn btn-accent"
+                                      className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold text-sm transition-all duration-300 shadow-sm hover:shadow-md"
                                       onClick={() => {
                                         refetchOrdersData();
                                         setEditableRowProd(null);
@@ -1326,16 +1294,16 @@ export default function OrderListView() {
                                     </button>
                                   </div>
 
-                                  <div className="text-black overflow-auto">
-                                    <table className="table relative text-center overflow-auto">
-                                      <thead className="text-black text-sm">
-                                        <tr>
+                                  <div className="bg-white rounded-2xl shadow-lg border border-blue-200/30 overflow-hidden">
+                                    <table className="table w-full text-center">
+                                      <thead>
+                                        <tr className="bg-gradient-to-r from-blue-900 to-blue-800 text-white">
                                           {/* <th>Article Name</th> */}
                                           {/* <td></td> */}
-                                          <th>OF_ID</th>
-                                          <th>Entry Date & Time</th>
-                                          <th>Exit Date & Time</th>
-                                          <th>Action</th>
+                                          <th className="text-xs font-bold py-3">OF_ID</th>
+                                          <th className="text-xs font-bold py-3">Entry Date & Time</th>
+                                          <th className="text-xs font-bold py-3">Exit Date & Time</th>
+                                          <th className="text-xs font-bold py-3">Action</th>
                                         </tr>
                                       </thead>
                                       {/* tbody for length */}
@@ -1527,13 +1495,13 @@ export default function OrderListView() {
                                                     </td>
 
                                                     <td className="border-y border-slate-500">
-                                                      <div className="flex gap-2">
+                                                      <div className="flex gap-2 justify-end">
                                                         {editableRowProd ===
                                                         index ? (
                                                           <>
                                                             <button
                                                               type="button"
-                                                              className="btn btn-success"
+                                                              className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold text-xs transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
                                                               onClick={async () => {
                                                                 try {
                                                                   await updateProductionMutation.mutateAsync(
@@ -1572,7 +1540,7 @@ export default function OrderListView() {
                                                               Save
                                                             </button>
                                                             <button
-                                                              className="btn btn-primary"
+                                                              className="px-3 py-1.5 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold text-xs transition-all duration-300 shadow-sm hover:shadow-md"
                                                               type="button"
                                                               onClick={() => {
                                                                 // Alert first, then reset the editable row and refetch data
@@ -1615,7 +1583,7 @@ export default function OrderListView() {
                                                           <>
                                                             <button
                                                               type="button"
-                                                              className={`btn btn-primary ${
+                                                              className={`px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-xs transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 ${
                                                                 editableRowProd !==
                                                                 null
                                                                   ? "hidden"
@@ -1733,11 +1701,11 @@ export default function OrderListView() {
                             name="rowsproofing"
                             render={(arrayHelpers) => (
                               <div>
-                                <div className="flex place-content-end gap-3">
+                                <div className="flex justify-end gap-3 mb-4">
                                   {/* {fetchedProofingData?.length === 0 ? ( */}
                                   {/* <> */}
                                   <button
-                                    className="btn btn-info"
+                                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-700 hover:to-cyan-800 text-white font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
                                     type="button"
                                     onClick={() =>
                                       arrayHelpers.push({
@@ -1752,7 +1720,7 @@ export default function OrderListView() {
                                     Add Proofing
                                   </button>
                                   <button
-                                    className="btn btn-primary"
+                                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
                                     type="submit"
                                   >
                                     Save Proofing
@@ -1760,7 +1728,7 @@ export default function OrderListView() {
                                   {/* </> */}
                                   {/* // ) : null} */}
                                   <button
-                                    className="btn btn-accent"
+                                    className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold text-sm transition-all duration-300 shadow-sm hover:shadow-md"
                                     onClick={() => {
                                       refetchOrdersData();
                                       setTractnumbercontrollenght(0);
@@ -1775,18 +1743,18 @@ export default function OrderListView() {
                                     Cancel
                                   </button>
                                 </div>
-                                <div className="text-black overflow-auto">
-                                  <table className="table relative text-center overflow-auto">
-                                    <thead className="text-black text-sm">
-                                      <tr>
+                                <div className="bg-white rounded-2xl shadow-lg border border-blue-200/30 overflow-hidden">
+                                  <table className="table w-full text-center">
+                                    <thead>
+                                      <tr className="bg-gradient-to-r from-blue-900 to-blue-800 text-white">
                                         {/* <th>Article Name</th> */}
                                         {/* <td></td> */}
-                                        <th>OF_ID</th>
-                                        <th>Entry Date & Time</th>
-                                        <th>Exit Date & Time</th>
-                                        <th>Number Of Pallets</th>
-                                        <th>Program Name</th>
-                                        <th>Action</th>
+                                        <th className="text-xs font-bold py-3">OF_ID</th>
+                                        <th className="text-xs font-bold py-3">Entry Date & Time</th>
+                                        <th className="text-xs font-bold py-3">Exit Date & Time</th>
+                                        <th className="text-xs font-bold py-3">Number Of Pallets</th>
+                                        <th className="text-xs font-bold py-3">Program Name</th>
+                                        <th className="text-xs font-bold py-3">Action</th>
                                       </tr>
                                     </thead>
                                     {/* tbody for length */}
@@ -1883,7 +1851,7 @@ export default function OrderListView() {
                                             </td>
                                             <td>
                                               <button
-                                                className="btn btn-error"
+                                                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold text-xs transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
                                                 type="button"
                                                 onClick={() =>
                                                   arrayHelpers.remove(index)
@@ -2016,13 +1984,13 @@ export default function OrderListView() {
                                                   />
                                                 </td>
                                                 <td className="border-y border-slate-500">
-                                                  <div className="flex gap-2">
+                                                  <div className="flex gap-2 justify-end">
                                                     {editableRowProof ===
                                                     index ? (
                                                       <>
                                                         <button
                                                           type="button"
-                                                          className="btn btn-success"
+                                                          className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold text-xs transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
                                                           onClick={async () => {
                                                             try {
                                                               await updateProofingMutation.mutateAsync(
@@ -2075,7 +2043,7 @@ export default function OrderListView() {
                                                         </button>
                                                         <button
                                                           type="button"
-                                                          className="btn btn-primary"
+                                                          className="px-3 py-1.5 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold text-xs transition-all duration-300 shadow-sm hover:shadow-md"
                                                           onClick={() => {
                                                             if (
                                                               window.confirm(
@@ -2111,7 +2079,7 @@ export default function OrderListView() {
                                                       <>
                                                         <button
                                                           type="button"
-                                                          className={`btn btn-primary ${
+                                                          className={`px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-xs transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 ${
                                                             editableRowProof !==
                                                             null
                                                               ? "hidden"
@@ -2237,9 +2205,9 @@ export default function OrderListView() {
                             name="rowsmeasurement"
                             render={(arrayHelpers) => (
                               <div>
-                                <div className="flex place-content-end gap-3">
+                                <div className="flex justify-end gap-3 mb-4">
                                   <button
-                                    className="btn btn-info"
+                                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-700 hover:to-cyan-800 text-white font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
                                     type="button"
                                     onClick={() => {
                                       const userInput = 3;
@@ -2313,19 +2281,19 @@ export default function OrderListView() {
                                   </button>
 
                                   <button
-                                    className="btn btn-primary"
+                                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
                                     type="submit"
                                   >
                                     Save Measurement
                                   </button>
                                   <button
-                                    className="btn btn-primary"
+                                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
                                     type="submit"
                                   >
                                     Add Measurement
                                   </button>
                                   <button
-                                    className="btn btn-accent"
+                                    className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold text-sm transition-all duration-300 shadow-sm hover:shadow-md"
                                     onClick={() => {
                                       refetchOrdersData();
                                       setIsModalOpen(false);
@@ -2339,11 +2307,12 @@ export default function OrderListView() {
                                     Cancel
                                   </button>
                                 </div>
-                                    <table className="table table-zebra w-min mt-4">
+                                    <div className="bg-white rounded-2xl shadow-lg border border-blue-200/30 overflow-hidden mb-4">
+                                    <table className="table w-full text-center">
   <thead>
-    <tr>
-      <th>Flat Crush</th>
-      <th>H20</th>
+    <tr className="bg-gradient-to-r from-blue-900 to-blue-800 text-white">
+      <th className="text-xs font-bold py-3">Flat Crush</th>
+      <th className="text-xs font-bold py-3">H20</th>
     </tr>
   </thead>
 
@@ -2392,22 +2361,23 @@ export default function OrderListView() {
   )}
                                     </tbody>
                                   </table>
+                                    </div>
 
-                                <div className="text-black overflow-auto">
-                                  <table className="table relative text-center overflow-auto">
-                                    <thead className="text-black text-sm">
-                                      <tr>
-                                        <th>Pallete</th>
-                                        <th>Length</th>
-                                        <th>Inside Diameter</th>
-                                        <th>Outside Diameter</th>
+                                <div className="bg-white rounded-2xl shadow-lg border border-blue-200/30 overflow-hidden">
+                                  <table className="table w-full text-center">
+                                    <thead>
+                                      <tr className="bg-gradient-to-r from-blue-900 to-blue-800 text-white">
+                                        <th className="text-xs font-bold py-3">Pallete</th>
+                                        <th className="text-xs font-bold py-3">Length</th>
+                                        <th className="text-xs font-bold py-3">Inside Diameter</th>
+                                        <th className="text-xs font-bold py-3">Outside Diameter</th>
                                        
-                                        <th>Radial</th>
-                                        <th>Core Out</th>
-                                        <th>Remarks</th>
-                                        <th>Option</th>
-                                        <th>Flat Crush</th>
-                                        <th>H20</th>
+                                        <th className="text-xs font-bold py-3">Radial</th>
+                                        <th className="text-xs font-bold py-3">Core Out</th>
+                                        <th className="text-xs font-bold py-3">Remarks</th>
+                                        <th className="text-xs font-bold py-3">Option</th>
+                                        <th className="text-xs font-bold py-3">Flat Crush</th>
+                                        <th className="text-xs font-bold py-3">H20</th>
                                       </tr>
                                     </thead>
                                     <tbody>
@@ -2817,13 +2787,13 @@ value={row.number_of_control}
                                                     readOnly={editableRowMes !== index} />
                                                 </td>
                                                 <td className="border-y border-slate-500">
-                                                  <div className="flex gap-2">
+                                                  <div className="flex gap-2 justify-end">
                                                     {editableRowMes ===
                                                       index ? (
                                                       <>
                                                         <button
                                                           type="button"
-                                                          className="btn btn-success"
+                                                          className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold text-xs transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
                                                           onClick={async () => {
                                                             try {
                                                               await updateMeasurementMutation.mutateAsync(
@@ -2858,7 +2828,7 @@ value={row.number_of_control}
                                                         </button>
                                                         <button
                                                           type="button"
-                                                          className="btn btn-primary"
+                                                          className="px-3 py-1.5 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold text-xs transition-all duration-300 shadow-sm hover:shadow-md"
                                                           onClick={() => {
                                                             if (window.confirm(
                                                               "Are you sure you want to cancel?"
@@ -2893,7 +2863,7 @@ value={row.number_of_control}
                                                           <>
                                                             <button
                                                               type="button"
-                                                              className={`btn btn-primary ${editableRowMes !==
+                                                              className={`px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-xs transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 ${editableRowMes !==
                                                                   null
                                                                   ? "hidden"
                                                                   : ""}`}
@@ -2911,11 +2881,11 @@ value={row.number_of_control}
                                                             </button>
                                                             <button
                                                               type="button"
-                                                              className={`btn btn-error ${editableRowMes !==
+                                                              className={`px-3 py-1.5 rounded-lg bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold text-xs transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 ${editableRowMes !==
                                                                   null
                                                                   ? "hidden"
                                                                   : ""} ${removeMeasurementMutation.isPending
-                                                                  ? "loading"
+                                                                  ? "opacity-50 cursor-not-allowed"
                                                                   : ""}`}
                                                               onClick={() => {
                                                                 const isConfirmed = window.confirm(
@@ -2930,6 +2900,7 @@ value={row.number_of_control}
                                                                   );
                                                                 }
                                                               } }
+                                                              disabled={removeMeasurementMutation.isPending}
                                                             >
                                                               Remove
                                                             </button>

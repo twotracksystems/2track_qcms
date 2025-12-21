@@ -9,8 +9,10 @@ import toast from "react-hot-toast";
 import * as Yup from "yup";
 import { FormInput,FormSearchableSelect, FormSelect } from "../UI/FormInput";
 import { useState, useEffect } from "react";
+import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
 export default function AddOrderList() {
   const navigator = useRouter();
+  useEscapeNavigation("/dashboard/order_management");
 
   const Add_Order_Validator = Yup.object().shape({
     OFId: Yup.string().required("Id is required"),
@@ -150,196 +152,150 @@ export default function AddOrderList() {
       label: `${assignee.first_name} ${assignee.last_name}`,
     })) || [];
 
+
   return (
-    <div className="flex flex-col w-11/12 mx-auto text-black">
-      <div className="breadcrumbs my-4 text-lg text-slate-600 font-semibold">
-        <ul>
-          <li>
-            <Link href="/dashboard/order_management">Order Management</Link>
-          </li>
-          <li>
-            <span>Add Order</span>
-          </li>
-        </ul>
-      </div>
-      <Formik
-        initialValues={{
-          OFId: "",
-          // product_name: "",
-          CustomerName: "",
-          ArticleName: "",
-          // AssigneeName: "",
-          PalleteCount: "",
-        }}
-        validationSchema={Add_Order_Validator}
-        onSubmit={async (e, actions) => {
-          AddOrderMutation.mutate({
-            order_fabrication_control: e.OFId,
-            // product_name: e.product_name,
-            customer_id: e.CustomerName,
-            article_id: e.ArticleName,
-            // assignee: e.AssigneeName,
-            pallete_count: e.PalleteCount,
-          });
-        }}
-      >
-        {({ errors, touched, values }) => (
-          <Form>
-            <div className="flex flex-col gap-y-6">
-              <div className="border p-12 rounded-md bg-white">
-                <h1 className="text-xl font-bold py-4">Order Details</h1>
-                <div className="grid grid-cols-2 gap-6 w-full">
-                  <div>
-                    <FormInput
-                      tooltip="Enter the order ID"
-                      name="OFId"
-                      type="number" 
-                      placeholder="Order ID"
-                      label="Order ID"
-                      errors={errors.OFId ? errors.OFId : ""}
-                      touched={touched.OFId ? "true":"" }// Adjust as needed
-                    />
-                  </div>
-                  {/* <div>
-                    <FormInput
-                      tooltip="Enter the product name"
-                      name="product_name"
-                      placeholder="Product Name"
-                      label="Product Name"
-                      errors={errors.product_name ? errors.product_name : ""}
-                      touched={touched.product_name ? "true" :""} // Adjust as needed
-                    />
-                  </div> */}
-                  <div>
-                    <label className="form-control w-96 max-w-lg">
-                      {/* <FormSelect
-                        tooltip="Select the customer's name from the dropdown"
-                        name="CustomerName"
-                        placeholder="Choose a customer"
-                        label="Customer Name"
-                        options={customerOptions
-                        }
-                        errors={errors.CustomerName ? errors.CustomerName : ""}
-                        touched={touched.CustomerName ? "true" :"" }// Adjust as needed
-                      />
-                      {isLoading && <p>Loading customers...</p>}
-                      {error && <p className="text-red-500">{error}</p>} */}
-                         <FormSearchableSelect
-        name="CustomerName"
-        label="Customer Name"
-        placeholder="Choose a customer"
-        tooltip="Select the customer's name from dropdown"
+    <div className="overflow-x-auto w-full text-black">
+      <div className="flex-1 flex flex-col gap-y-3 h-full min-w-0 px-6 py-4">
+        {/* Page Title */}
+        <div className="mb-2">
+          <h1 className="text-xl font-bold text-blue-900">Add Order</h1>
+        </div>
 
-        errors={errors.CustomerName}
-        touched={touched.CustomerName ? "true" :"" }// Adjust as needed
-        options={customerOptions}
-      />
-                    </label>
-                  </div>
-                  <div>
-                    <label className="form-control w-96 max-w-lg">
-                      {/* <FormSelect
-                        tooltip="Select the product's name from the dropdown"
-                        name="ArticleName"
-                        placeholder="Choose a Product"
-                        label="Product Name"
-                        options={articleOptions}
-                        errors={errors.ArticleName ? errors.ArticleName : ""}
-                        touched={touched.ArticleName? "true":""} // Adjust as needed
+        <Formik
+          initialValues={{
+            OFId: "",
+            // product_name: "",
+            CustomerName: "",
+            ArticleName: "",
+            // AssigneeName: "",
+            PalleteCount: "",
+          }}
+          validationSchema={Add_Order_Validator}
+          onSubmit={async (e, actions) => {
+            AddOrderMutation.mutate({
+              order_fabrication_control: e.OFId,
+              // product_name: e.product_name,
+              customer_id: e.CustomerName,
+              article_id: e.ArticleName,
+              // assignee: e.AssigneeName,
+              pallete_count: e.PalleteCount,
+            });
+          }}
+        >
+          {({ errors, touched, values }) => (
+            <Form>
+              <div className="flex flex-col gap-y-3">
+                {/* Form Container with matching styling */}
+                <div className="bg-white rounded-2xl shadow-lg border border-blue-200/30 overflow-hidden p-6">
+                  <h1 className="text-lg font-bold text-blue-900 mb-6 pb-3 border-b border-blue-200/50">Order Details</h1>
+                  <div className="grid grid-cols-2 gap-6 w-full">
+                    <div>
+                      <FormInput
+                        tooltip="Enter the order ID"
+                        name="OFId"
+                        type="number" 
+                        placeholder="Order ID"
+                        label="Order ID"
+                        errors={errors.OFId ? errors.OFId : ""}
+                        touched={touched.OFId ? "true":"" }// Adjust as needed
                       />
-                      {isLoading && <p>Loading article...</p>}
-                      {error && <p className="text-red-500">{error}</p>} */}
-                      <FormSearchableSelect
-                              name="ArticleName"
-                              label="ID Article"
-                              placeholder="Choose a ID Article"
-                              
-                              tooltip="Select the ID Article from dropdown"
-                              errors={errors.ArticleName}
-                              touched={touched.ArticleName ? "true" :"" } // Adjust as needed
-                              options={articleOptions}
-                            />
-                    </label>
-                  </div>
-                  {/* <div>
-                    <FormSelect
-                      tooltip="Select the article's name from the dropdown"
-                      name="AssigneeName"
-                      placeholder="Choose a Assignee"
-                      label="Assignee Name"
-                      options={assignOptions}
-                      errors={error ? error : ""}
-                      touched="true" // Adjust as needed
-                    />
-                    {isLoading && <p>Loading article...</p>}
-                    {error && <p className="text-red-500">{error}</p>}
-                  </div> */}
-                  <div>
-                    <label className="form-control w-96 max-w-lg">
-                      <div className="label">
-                        <span className="label-text font-bold gap-x-2 flex flex-row">
-                          Pallete Count
-                          <span
-                            className="tooltip tooltip-right"
-                            data-tip="Pallet count is the number of pallets that will be used for this order."
-                          >
-                            <CircleHelp
-                              className=" my-auto"
-                              size={20}
-                              strokeWidth={0.75}
-                            />
+                    </div>
+                    <div>
+                      <label className="form-control w-full max-w-lg">
+                        <FormSearchableSelect
+                          name="CustomerName"
+                          label="Customer Name"
+                          placeholder="Choose a customer"
+                          tooltip="Select the customer's name from dropdown"
+                          errors={errors.CustomerName}
+                          touched={touched.CustomerName ? "true" :"" }// Adjust as needed
+                          options={customerOptions}
+                        />
+                      </label>
+                    </div>
+                    <div>
+                      <label className="form-control w-full max-w-lg">
+                        <FormSearchableSelect
+                          name="ArticleName"
+                          label="ID Article"
+                          placeholder="Choose a ID Article"
+                          tooltip="Select the ID Article from dropdown"
+                          errors={errors.ArticleName}
+                          touched={touched.ArticleName ? "true" :"" } // Adjust as needed
+                          options={articleOptions}
+                        />
+                      </label>
+                    </div>
+                    <div>
+                      <label className="form-control w-full max-w-lg">
+                        <div className="label">
+                          <span className="label-text font-bold gap-x-2 flex flex-row">
+                            Pallete Count
+                            <span
+                              className="tooltip tooltip-right"
+                              data-tip="Pallet count is the number of pallets that will be used for this order."
+                            >
+                              <CircleHelp
+                                className=" my-auto"
+                                size={20}
+                                strokeWidth={0.75}
+                              />
+                            </span>
                           </span>
-                        </span>
-                      </div>
-                      <Field
-                        type="number"
-                        placeholder="Pallete Count"
-                        name="PalleteCount"
-                        className={`input input-bordered w-full max-w-md ${
-                          errors.PalleteCount && touched.PalleteCount
-                            ? "input-error"
-                            : ""
-                        }`}
-                      />
-                    </label>
+                        </div>
+                        <Field
+                          type="number"
+                          placeholder="Pallete Count"
+                          name="PalleteCount"
+                          className={`input input-bordered w-full max-w-md ${
+                            errors.PalleteCount && touched.PalleteCount
+                              ? "input-error"
+                              : ""
+                          }`}
+                        />
+                      </label>
 
-                    {errors.PalleteCount && touched.PalleteCount ? (
-                      <span className="text-error  flex flex-row">
-                        {errors.PalleteCount}
-                      </span>
-                    ) : null}
+                      {errors.PalleteCount && touched.PalleteCount ? (
+                        <span className="text-error  flex flex-row">
+                          {errors.PalleteCount}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
+
+                {/* Action Buttons with matching styling */}
+                <div className="flex justify-end gap-3 mt-4">
+                  <Link
+                    className="px-3 py-2 rounded-lg bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600 text-white font-bold text-xs transition-all duration-300 shadow-md hover:shadow-lg shrink-0 whitespace-nowrap transform hover:scale-105 active:scale-95 border border-gray-400/20"
+                    href="/dashboard/order_management"
+                  >
+                    BACK
+                  </Link>
+                  <button
+                    type="submit"
+                    className={`px-3 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs transition-all duration-300 shadow-md hover:shadow-lg shrink-0 whitespace-nowrap transform hover:scale-105 active:scale-95 border border-blue-500/20 flex items-center gap-2 ${
+                      AddOrderMutation.isPending ? "opacity-50 cursor-not-allowed" : ""
+                    }`}
+                    disabled={AddOrderMutation.isPending}
+                  >
+                    {AddOrderMutation.isPending ? (
+                      <>
+                        <span className="loading loading-dots loading-sm"></span>
+                        Adding order...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4" /> Add Order
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="modal-action p-6">
-              <button
-                type="submit"
-                className={`btn btn-primary ${
-                  AddOrderMutation.isPending ? "btn-disabled" : "btn-primary"
-                } btn-md`}
-              >
-                {AddOrderMutation.isPending ? (
-                  <>
-                    <span className="loading loading-dots loading-sm"></span>{" "}
-                    Adding order...
-                  </>
-                ) : (
-                  <>
-                    <Plus /> Add Order
-                  </>
-                )}
-              </button>
-              <Link
-                className="btn btn-accent btn-md "
-                href="/dashboard/order_management"
-              >
-                BACK
-              </Link>
-            </div>
-          </Form>
-        )}
-      </Formik>
+            </Form>
+          )}
+        </Formik>
+      </div>
     </div>
   );
 }

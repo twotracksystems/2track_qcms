@@ -8,8 +8,9 @@ import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import Select from 'react-select';
-import { Pencil, Radical } from "lucide-react";
+import { Pencil, Plus, Radical } from "lucide-react";
 import * as Yup from "yup";
+import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
 
 export default function AddArticleListCopy() {
   const queryClient = new QueryClient();
@@ -17,6 +18,7 @@ export default function AddArticleListCopy() {
   console.log(query);
   // const id = params.params;
   const navigator = useRouter();
+  useEscapeNavigation("/dashboard/article_management");
   const supabase = createClient(); // Create the Supabase client instance
 
   const [useremail, setUseremail] = useState<string | null>(null);
@@ -223,18 +225,12 @@ export default function AddArticleListCopy() {
     })) || [];
 
   return (
-    <div className="flex flex-col w-full p-12 mx-auto text-black">
-      <div className="breadcrumbs my-4 text-lg text-slate-600 font-semibold">
-        <ul>
-          <li>
-            <Link href="/dashboard/article_management">Article Management</Link>
-          </li>
-        </ul>
-      </div>
-      <Formik
-        initialValues={initialValues}
-        validationSchema={validationSchema}
-        onSubmit={async (values) => {
+    <div className="flex flex-col w-full px-6 py-4 text-black">
+      <div className="flex-1 flex flex-col gap-y-3 h-full min-w-0">
+        <Formik
+          initialValues={initialValues}
+          validationSchema={validationSchema}
+          onSubmit={async (values) => {
           for (const row of values.rows) {
             try {
               const [nominal, min, max] = await Promise.all([
@@ -293,401 +289,310 @@ export default function AddArticleListCopy() {
       >
         {({ values, setFieldValue, errors, touched }) => (
           <Form>
-            <div className="">
-              <FieldArray
-                name="rows"
-                render={(arrayHelpers) => (
-                  <div>
-                    <div className="flex place-content-start gap-6">
-                      {values.rows.map((row, index) => (
-                        <div key={index} className="flex gap-4">
-                          <div className="inline gap-2">
-                            <label className="label">ID Number</label>
-                            <Field
-                              name={`rows.${index}.id_number`}
-                              type="text"
-                              placeholder="Enter ID Number"
-                              className={`input input-bordered
-                             ${
-                               typeof errors.rows?.[index] === "object" &&
-                               errors.rows?.[index]?.id_number &&
-                               touched.rows?.[index]?.id_number
-                                 ? "border-red-500"
-                                 : ""
-                             } 
-                            `}
-                            />{" "}
-                            <ErrorMessage
-                              name={`rows.${index}.id_number`}
-                              component="div"
-                              className="text-red-500 text-sm"
-                            />
-                          </div>
-                          <div className="inline gap-2">
-                            <label className="label">Product Name</label>
-                            <Field
-                              name={`rows.${index}.article_name`}
-                              type="text"
-                              placeholder="Enter Product Name"
-                              className={`input input-bordered
-                             ${
-                               typeof errors.rows?.[index] === "object" &&
-                               errors.rows?.[index]?.article_name &&
-                               touched.rows?.[index]?.article_name
-                                 ? "border-red-500"
-                                 : ""
-                             } 
-                            `}
-                            />{" "}
-                            <ErrorMessage
-                              name={`rows.${index}.article_name`}
-                              component="div"
-                              className="text-red-500 text-sm"
-                            />
-                          </div>
-                          <div className="inline gap-2">
-                            <label className="label">Customer Name</label>
-                            {/* <Field
-                              as="select"
-                              name={`rows.${index}.customer_id`}
-                              className={`select select-bordered
-                                   ${
-                                     typeof errors.rows?.[index] === "object" &&
-                                     errors.rows?.[index]?.customer_id &&
-                                     touched.rows?.[index]?.customer_id
-                                       ? "border-red-500"
-                                       : ""
-                                   } `}
-                              defaultValue=""
-                              onChange={(e: any) => {
-                                // Update Formik state directly
-                                setFieldValue(
-                                  `rows.${index}.customer_id`,
-                                  e.target.value
-                                );
-                              }}
-                            >
-                              <option value="" disabled>
-                                Select Customer
-                              </option>
-                              {customerOptions?.map((option: any) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </Field> */}
-                            <Select
-                              name={`rows.${index}.customer_id`}
-                              placeholder="Select Customer"
-                              options={customerOptions}
-                              onChange={(option: any) => {
-                                setFieldValue(
-                                  `rows.${index}.customer_id`,
-                                  option.value
-                                );
-                              }}
-                              className={`text-lg mt-1 bg-white select-bordered mx-auto w-full max-w-md${
-                                typeof errors.rows?.[index] === "object" &&
-                                errors.rows?.[index]?.customer_id &&
-                                touched.rows?.[index]?.customer_id
-                                  ? "border-red-500"
-                                  : ""
-                              }`}
-                              
-                              />
-
-                            <ErrorMessage
-                              name={`rows.${index}.customer_id`}
-                              component="div"
-                              className="text-red-500 text-sm"
-                            />
-                          </div>
-
-                          <div className="inline gap-2">
-                            <label className="label">Number of Control</label>
-                            <Field
-                              name={`rows.${index}.NumberControl`}
-                              type="number"
-                              placeholder="Enter Number Of Control"
-                              className={`input input-bordered    ${
-                                typeof errors.rows?.[index] === "object" &&
-                                errors.rows?.[index]?.NumberControl &&
-                                touched.rows?.[index]?.NumberControl
-                                  ? "border-red-500"
-                                  : ""
-                              }`}
-                            />
-                            <ErrorMessage
-                              name={`rows.${index}.NumberControl`}
-                              component="div"
-                              className="text-red-500 text-sm"
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="flex place-content-end gap-3">
-                      <button className="btn btn-primary" type="submit">
-                        Add Article
-                      </button>
-                      <Link
-                        href="/dashboard/article_management"
-                        className="btn btn-accent"
-                      >
-                        Back
-                      </Link>
-                    </div>
-                    <div className="text-black overflow-auto">
-                      <table className="table relative text-center overflow-auto">
-                        <thead className="text-black text-sm">
-                          <tr>
-                            {/* <th>Article Name</th> */}
-                            <td></td>
-                            <th>Scoll Nominal</th>
-                            <th>Min</th>
-                            <th>Max</th>
-                            {/* <th>Action</th> */}
-                          </tr>
-                        </thead>
-                        {/* tbody for length */}{" "}
+            <div className="flex flex-col gap-y-6">
+              <div className="bg-white rounded-2xl shadow-lg border border-blue-200/30 p-8">
+                <h1 className="text-2xl font-bold py-4 text-gray-800 border-b border-gray-200 pb-4 mb-6">Article Management</h1>
+                <FieldArray
+                  name="rows"
+                  render={(arrayHelpers) => (
+                    <div>
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                         {values.rows.map((row, index) => (
                           <React.Fragment key={index}>
-                            <tbody>
-                              <tr>
-                                <td>Length</td>
-                                <td>
-                                  <Field
-                                    name={`rows.${index}.LengthNominal`}
-                                    type="number"
-                                    className="input input-bordered"
-                                  />
-                                </td>
-                                <td>
-                                  <Field
-                                    name={`rows.${index}.LengthMin`}
-                                    type="number"
-                                    className="input input-bordered"
-                                  />
-                                </td>
-                                <td>
-                                  <Field
-                                    name={`rows.${index}.LengthMax`}
-                                    type="number"
-                                    className="input input-bordered"
-                                  />
-                                </td>
+                            <div className="flex flex-col gap-2">
+                              <label className="text-sm font-semibold text-gray-700">ID Number</label>
+                              <Field
+                                name={`rows.${index}.id_number`}
+                                type="text"
+                                placeholder="Enter ID Number"
+                                className={`input input-bordered w-full
+                                 ${
+                                   typeof errors.rows?.[index] === "object" &&
+                                   errors.rows?.[index]?.id_number &&
+                                   touched.rows?.[index]?.id_number
+                                     ? "border-red-500"
+                                     : ""
+                                 } 
+                                `}
+                              />
+                              <ErrorMessage
+                                name={`rows.${index}.id_number`}
+                                component="div"
+                                className="text-red-500 text-xs"
+                              />
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <label className="text-sm font-semibold text-gray-700">Product Name</label>
+                              <Field
+                                name={`rows.${index}.article_name`}
+                                type="text"
+                                placeholder="Enter Product Name"
+                                className={`input input-bordered w-full
+                                 ${
+                                   typeof errors.rows?.[index] === "object" &&
+                                   errors.rows?.[index]?.article_name &&
+                                   touched.rows?.[index]?.article_name
+                                     ? "border-red-500"
+                                     : ""
+                                 } 
+                                `}
+                              />
+                              <ErrorMessage
+                                name={`rows.${index}.article_name`}
+                                component="div"
+                                className="text-red-500 text-xs"
+                              />
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <label className="text-sm font-semibold text-gray-700">Customer Name</label>
+                              <Select
+                                name={`rows.${index}.customer_id`}
+                                placeholder="Select Customer"
+                                options={customerOptions}
+                                onChange={(option: any) => {
+                                  setFieldValue(
+                                    `rows.${index}.customer_id`,
+                                    option.value
+                                  );
+                                }}
+                                className={`text-sm mt-1 bg-white w-full${
+                                  typeof errors.rows?.[index] === "object" &&
+                                  errors.rows?.[index]?.customer_id &&
+                                  touched.rows?.[index]?.customer_id
+                                    ? "border-red-500"
+                                    : ""
+                                }`}
+                              />
+                              <ErrorMessage
+                                name={`rows.${index}.customer_id`}
+                                component="div"
+                                className="text-red-500 text-xs"
+                              />
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <label className="text-sm font-semibold text-gray-700">Number of Control</label>
+                              <Field
+                                name={`rows.${index}.NumberControl`}
+                                type="number"
+                                placeholder="Enter Number Of Control"
+                                className={`input input-bordered w-full ${
+                                  typeof errors.rows?.[index] === "object" &&
+                                  errors.rows?.[index]?.NumberControl &&
+                                  touched.rows?.[index]?.NumberControl
+                                    ? "border-red-500"
+                                    : ""
+                                }`}
+                              />
+                              <ErrorMessage
+                                name={`rows.${index}.NumberControl`}
+                                component="div"
+                                className="text-red-500 text-xs"
+                              />
+                            </div>
+                          </React.Fragment>
+                        ))}
+                      </div>
 
-                                {/* <td>
-                                  <button
-                                    className="btn btn-danger"
-                                    type="button"
-                                    onClick={() => arrayHelpers.remove(index)}
-                                  >
-                                    Remove
-                                  </button>
-                                </td> */}
+                      <div className="bg-white rounded-2xl shadow-lg border border-blue-200/30 overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-center table-auto">
+                            <thead>
+                              <tr className="bg-gradient-to-r from-blue-900 to-blue-800 text-white">
+                                <th className="px-4 py-3 font-bold text-xs uppercase tracking-wide whitespace-nowrap"></th>
+                                <th className="px-4 py-3 font-bold text-xs uppercase tracking-wide whitespace-nowrap">Scroll Nominal</th>
+                                <th className="px-4 py-3 font-bold text-xs uppercase tracking-wide whitespace-nowrap">Min</th>
+                                <th className="px-4 py-3 font-bold text-xs uppercase tracking-wide whitespace-nowrap">Max</th>
                               </tr>
-                            </tbody>
-                            {/* tbody for inside diameter */}
-                            <tbody>
-                              <tr>
-                                <td>Inside Diameter</td>
-                                <td>
-                                  <Field
-                                    name={`rows.${index}.InsideDiameterNominal`}
-                                    type="number"
-                                    className="input input-bordered"
-                                  />
-                                </td>
-                                <td>
-                                  <Field
-                                    name={`rows.${index}.InsideDiameterMin`}
-                                    type="number"
-                                    className="input input-bordered"
-                                  />
-                                </td>
-                                <td>
-                                  <Field
-                                    name={`rows.${index}.InsideDiameterMax`}
-                                    type="number"
-                                    className="input input-bordered"
-                                  />
-                                </td>
-
-                                {/* <td>
-                                  <button
-                                    className="btn btn-danger"
-                                    type="button"
-                                    onClick={() => arrayHelpers.remove(index)}
-                                  >
-                                    Remove
-                                  </button>
-                                </td> */}
-                              </tr>
-                            </tbody>
-                            {/* tbody for outside diameter */}
-                            <tbody>
-                              <tr>
-                                <td>Outside Diameter</td>
-                                <td>
-                                  <Field
-                                    name={`rows.${index}.OutsideDiameterNominal`}
-                                    type="number"
-                                    className="input input-bordered"
-                                  />
-                                </td>
-                                <td>
-                                  <Field
-                                    name={`rows.${index}.OutsideDiameterMin`}
-                                    type="number"
-                                    className="input input-bordered"
-                                  />
-                                </td>
-                                <td>
-                                  <Field
-                                    name={`rows.${index}.OutsideDiameterMax`}
-                                    type="number"
-                                    className="input input-bordered"
-                                  />
-                                </td>
-
-                                {/* <td>
-                                  <button
-                                    className="btn btn-danger"
-                                    type="button"
-                                    onClick={() => arrayHelpers.remove(index)}
-                                  >
-                                    Remove
-                                  </button>
-                                </td> */}
-                              </tr>
-                            </tbody>
-                            {/* tbody for flat crush */}
-                            <tbody>
-                          
-                                  <tr>
-                                    <td>Flat Crush</td>
-                                    <td>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200/50">
+                              {values.rows.map((row, index) => (
+                                <React.Fragment key={index}>
+                                  <tr className="hover:bg-blue-50/50 transition-colors duration-200">
+                                    <td className="px-4 py-3 text-xs font-semibold text-gray-700 whitespace-nowrap bg-gray-50">Length</td>
+                                    <td className="px-4 py-3">
+                                      <Field
+                                        name={`rows.${index}.LengthNominal`}
+                                        type="number"
+                                        className="input input-bordered w-full text-xs"
+                                      />
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <Field
+                                        name={`rows.${index}.LengthMin`}
+                                        type="number"
+                                        className="input input-bordered w-full text-xs"
+                                      />
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <Field
+                                        name={`rows.${index}.LengthMax`}
+                                        type="number"
+                                        className="input input-bordered w-full text-xs"
+                                      />
+                                    </td>
+                                  </tr>
+                                  <tr className="hover:bg-blue-50/50 transition-colors duration-200">
+                                    <td className="px-4 py-3 text-xs font-semibold text-gray-700 whitespace-nowrap bg-gray-50">Inside Diameter</td>
+                                    <td className="px-4 py-3">
+                                      <Field
+                                        name={`rows.${index}.InsideDiameterNominal`}
+                                        type="number"
+                                        className="input input-bordered w-full text-xs"
+                                      />
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <Field
+                                        name={`rows.${index}.InsideDiameterMin`}
+                                        type="number"
+                                        className="input input-bordered w-full text-xs"
+                                      />
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <Field
+                                        name={`rows.${index}.InsideDiameterMax`}
+                                        type="number"
+                                        className="input input-bordered w-full text-xs"
+                                      />
+                                    </td>
+                                  </tr>
+                                  <tr className="hover:bg-blue-50/50 transition-colors duration-200">
+                                    <td className="px-4 py-3 text-xs font-semibold text-gray-700 whitespace-nowrap bg-gray-50">Outside Diameter</td>
+                                    <td className="px-4 py-3">
+                                      <Field
+                                        name={`rows.${index}.OutsideDiameterNominal`}
+                                        type="number"
+                                        className="input input-bordered w-full text-xs"
+                                      />
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <Field
+                                        name={`rows.${index}.OutsideDiameterMin`}
+                                        type="number"
+                                        className="input input-bordered w-full text-xs"
+                                      />
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <Field
+                                        name={`rows.${index}.OutsideDiameterMax`}
+                                        type="number"
+                                        className="input input-bordered w-full text-xs"
+                                      />
+                                    </td>
+                                  </tr>
+                                  <tr className="hover:bg-blue-50/50 transition-colors duration-200">
+                                    <td className="px-4 py-3 text-xs font-semibold text-gray-700 whitespace-nowrap bg-gray-50">Flat Crush</td>
+                                    <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.FlatCrushNominal`}
                                         type="number"
-                                        className="input input-bordered"
+                                        className="input input-bordered w-full text-xs"
                                       />
                                     </td>
-                                    <td>
+                                    <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.FlatCrushMin`}
                                         type="number"
-                                        className="input input-bordered"
+                                        className="input input-bordered w-full text-xs"
                                       />
                                     </td>
-                                    <td>
+                                    <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.FlatCrushMax`}
                                         type="number"
-                                        className="input input-bordered"
+                                        className="input input-bordered w-full text-xs"
                                       />
                                     </td>
-                                    {/* 
-                                <td>
-                                  <button
-                                    className="btn btn-danger"
-                                    type="button"
-                                    onClick={() => arrayHelpers.remove(index)}
-                                  >
-                                    Remove
-                                  </button>
-                                </td> */}
                                   </tr>
-                               
+                                  <tr className="hover:bg-blue-50/50 transition-colors duration-200">
+                                    <td className="px-4 py-3 text-xs font-semibold text-gray-700 whitespace-nowrap bg-gray-50">H₂O</td>
+                                    <td className="px-4 py-3">
+                                      <Field
+                                        name={`rows.${index}.H20Nominal`}
+                                        type="number"
+                                        className="input input-bordered w-full text-xs"
+                                      />
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <Field
+                                        name={`rows.${index}.H20Min`}
+                                        type="number"
+                                        className="input input-bordered w-full text-xs"
+                                      />
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <Field
+                                        name={`rows.${index}.H20Max`}
+                                        type="number"
+                                        className="input input-bordered w-full text-xs"
+                                      />
+                                    </td>
+                                  </tr>
+                                  <tr className="hover:bg-blue-50/50 transition-colors duration-200">
+                                    <td className="px-4 py-3 text-xs font-semibold text-gray-700 whitespace-nowrap bg-gray-50">Radial</td>
+                                    <td className="px-4 py-3">
+                                      <Field
+                                        name={`rows.${index}.RadialNominal`}
+                                        type="number"
+                                        className="input input-bordered w-full text-xs"
+                                      />
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <Field
+                                        name={`rows.${index}.RadialMin`}
+                                        type="number"
+                                        className="input input-bordered w-full text-xs"
+                                      />
+                                    </td>
+                                    <td className="px-4 py-3">
+                                      <Field
+                                        name={`rows.${index}.RadialMax`}
+                                        type="number"
+                                        className="input input-bordered w-full text-xs"
+                                      />
+                                    </td>
+                                  </tr>
+                                </React.Fragment>
+                              ))}
                             </tbody>
-                            {/* tbody for h20 */}
-                            <tbody>
-                              <tr>
-                                <td>H20</td>
-                                <td>
-                                  <Field
-                                    name={`rows.${index}.H20Nominal`}
-                                    type="number"
-                                    className="input input-bordered"
-                                  />
-                                </td>
-                                <td>
-                                  <Field
-                                    name={`rows.${index}.H20Min`}
-                                    type="number"
-                                    className="input input-bordered"
-                                  />
-                                </td>
-                                <td>
-                                  <Field
-                                    name={`rows.${index}.H20Max`}
-                                    type="number"
-                                    className="input input-bordered"
-                                  />
-                                </td>
-
-                                {/* <td>
-                                  <button
-                                    className="btn btn-danger"
-                                    type="button"
-                                    onClick={() => arrayHelpers.remove(index)}
-                                  >
-                                    Remove
-                                  </button>
-                                </td> */}
-                              </tr>
-                            </tbody>
-                            
-                            <tbody>
-                              <tr>
-                                <td>Radial</td>
-                                <td>
-                                  <Field
-                                    name={`rows.${index}.RadialNominal`}
-                                    type="number"
-                                    className="input input-bordered"
-                                  />
-                                </td>
-                                <td>
-                                  <Field
-                                    name={`rows.${index}.RadialMin`}
-                                    type="number"
-                                    className="input input-bordered"
-                                  />
-                                </td>
-                                <td>
-                                  <Field
-                                    name={`rows.${index}.RadialMax`}
-                                    type="number"
-                                    className="input input-bordered"
-                                  />
-                                </td>
-
-                                {/* <td>
-                                  <button
-                                    className="btn btn-danger"
-                                    type="button"
-                                    onClick={() => arrayHelpers.remove(index)}
-                                  >
-                                    Remove
-                                  </button>
-                                </td> */}
-                              </tr>
-                            </tbody>
-
-                          </React.Fragment>
-                        ))}
-                      </table>
+                          </table>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                )}
-              />
+                  )}
+                />
+              </div>
+              <div className="flex justify-end gap-3 mt-6">
+                <button
+                  type="submit"
+                  className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 ${
+                    AddArticleMutation.isPending 
+                      ? "bg-gray-400 cursor-not-allowed" 
+                      : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
+                  }`}
+                  disabled={AddArticleMutation.isPending}
+                >
+                  {AddArticleMutation.isPending ? (
+                    <>
+                      <span className="loading loading-dots loading-sm"></span> Adding Article...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="inline mr-2" size={18} /> Add Article
+                    </>
+                  )}
+                </button>
+                <Link
+                  href="/dashboard/article_management"
+                  className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold text-sm transition-all duration-300 shadow-sm hover:shadow-md"
+                >
+                  Back
+                </Link>
+              </div>
             </div>
           </Form>
         )}
       </Formik>
+      </div>
     </div>
   );
 }

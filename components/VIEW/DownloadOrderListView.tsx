@@ -4,7 +4,8 @@ import toast from "react-hot-toast";
 import { createClient } from "@/utils/supabase/client";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { create } from "domain";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 
@@ -61,77 +62,112 @@ export default function DownloadOrderListView({
   mode = "preview",
   selectedOrders = [], // Array of selected order objects from the rows
 }: DownloadOrderListViewProps) {
-  const baseStyle = { backgroundColor: "#1d4ed8", color: "#fff" };
-  const disabledStyle = { opacity: 0.5, cursor: "not-allowed" };
-
   const [isDisabled, setIsDisabled] = useState(false);
   const [buttonLabel, setButtonLabel] = useState("Download");
   const [isLoading, setIsLoading] = useState(false);
+  
+  // State for modal and matching articles
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [matchingArticlesByOfid, setMatchingArticlesByOfid] = useState<Record<string, any[]>>({});
+  const [isFetchingMatches, setIsFetchingMatches] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  // State for selected articles: { ofid: { articleId: articleData } }
+  const [selectedArticlesByOfid, setSelectedArticlesByOfid] = useState<Record<string, Record<number, any>>>({});
+
+  // Ensure we're on the client side for portal rendering
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const canvasRef = useRef<HTMLCanvasElement>(null); // used to refer to the canvas element containing the chart
 
   // function to get customer specifications data
   const GetCustomerSpecificationsData = async (
-    nominalArticleId: number,
-    minArticleId: number,
-    maxArticleId: number
+    nominalArticleId: number | null | undefined,
+    minArticleId: number | null | undefined,
+    maxArticleId: number | null | undefined
   ) => {
     const customerSpecificationsDataAggregated = [];
 
-    const responseNominal = await fetch(
-      // index [0] = nominal, index [1] = Max, index [2] = Min
-      `/api/v1/getonearticlenominal?id=${encodeURIComponent(nominalArticleId)}`,
-      {
-        method: "GET",
-        headers: {
-          Accept: "*/*",
-          "User-Agent": "Thunder Client (https://www.thunderclient.com)",
-        },
+    // Only fetch if we have a valid ID (not null, undefined, or "***")
+    if (nominalArticleId && nominalArticleId !== "***" && !isNaN(Number(nominalArticleId))) {
+      try {
+        const responseNominal = await fetch(
+          // index [0] = nominal, index [1] = Max, index [2] = Min
+          `/api/v1/getonearticlenominal?id=${encodeURIComponent(nominalArticleId)}`,
+          {
+            method: "GET",
+            headers: {
+              Accept: "*/*",
+              "User-Agent": "Thunder Client (https://www.thunderclient.com)",
+            },
+          }
+        );
+
+        if (responseNominal.ok) {
+          const nominalResult = await responseNominal.json();
+          customerSpecificationsDataAggregated.push(nominalResult[0] || {});
+        } else {
+          customerSpecificationsDataAggregated.push({});
+        }
+      } catch (error) {
+        console.error("Error fetching nominal article:", error);
+        customerSpecificationsDataAggregated.push({});
       }
-    );
-
-    const nominalResult = await responseNominal.json();
-
-    if (responseNominal.ok) {
-      customerSpecificationsDataAggregated.push(nominalResult[0]);
     } else {
       customerSpecificationsDataAggregated.push({});
     }
 
-    const responseMin = await fetch(
-      `/api/v1/getonearticlemin?id=${encodeURIComponent(minArticleId)}`,
-      {
-        method: "GET",
-        headers: {
-          Accept: "*/*",
-          "User-Agent": "Thunder Client (https://www.thunderclient.com)",
-        },
+    if (minArticleId && minArticleId !== "***" && !isNaN(Number(minArticleId))) {
+      try {
+        const responseMin = await fetch(
+          `/api/v1/getonearticlemin?id=${encodeURIComponent(minArticleId)}`,
+          {
+            method: "GET",
+            headers: {
+              Accept: "*/*",
+              "User-Agent": "Thunder Client (https://www.thunderclient.com)",
+            },
+          }
+        );
+
+        if (responseMin.ok) {
+          const minResult = await responseMin.json();
+          customerSpecificationsDataAggregated.push(minResult[0] || {});
+        } else {
+          customerSpecificationsDataAggregated.push({});
+        }
+      } catch (error) {
+        console.error("Error fetching min article:", error);
+        customerSpecificationsDataAggregated.push({});
       }
-    );
-
-    const minResult = await responseMin.json();
-
-    if (responseMin.ok) {
-      customerSpecificationsDataAggregated.push(minResult[0]);
     } else {
       customerSpecificationsDataAggregated.push({});
     }
 
-    const responseMax = await fetch(
-      `/api/v1/getonearticlemax?id=${encodeURIComponent(maxArticleId)}`,
-      {
-        method: "GET",
-        headers: {
-          Accept: "*/*",
-          "User-Agent": "Thunder Client (https://www.thunderclient.com)",
-        },
+    if (maxArticleId && maxArticleId !== "***" && !isNaN(Number(maxArticleId))) {
+      try {
+        const responseMax = await fetch(
+          `/api/v1/getonearticlemax?id=${encodeURIComponent(maxArticleId)}`,
+          {
+            method: "GET",
+            headers: {
+              Accept: "*/*",
+              "User-Agent": "Thunder Client (https://www.thunderclient.com)",
+            },
+          }
+        );
+
+        if (responseMax.ok) {
+          const maxResult = await responseMax.json();
+          customerSpecificationsDataAggregated.push(maxResult[0] || {});
+        } else {
+          customerSpecificationsDataAggregated.push({});
+        }
+      } catch (error) {
+        console.error("Error fetching max article:", error);
+        customerSpecificationsDataAggregated.push({});
       }
-    );
-
-    const maxResult = await responseMax.json();
-
-    if (responseMax.ok) {
-      customerSpecificationsDataAggregated.push(maxResult[0]);
     } else {
       customerSpecificationsDataAggregated.push({});
     }
@@ -161,13 +197,124 @@ export default function DownloadOrderListView({
     }
   };
 
+  // Function to fetch matching articles for an OFID
+  const fetchMatchingArticles = async (ofid: string) => {
+    try {
+      const response = await fetch(
+        `/api/v1/test_resolve_by_ofid?ofid=${encodeURIComponent(ofid)}`,
+        {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        return [];
+      }
+
+      const data = await response.json();
+      return data.matching_articles || [];
+    } catch (error) {
+      return [];
+    }
+  };
+
+  // Function to format and log customer specifications in a table
+  const logCustomerSpecificationsTable = (
+    nominal_data: any,
+    min_data: any,
+    max_data: any,
+    orderNo?: string
+  ) => {
+    // Helper function to format values (handle null, undefined, and numbers)
+    const formatValue = (value: any): string => {
+      if (value === null || value === undefined || value === "") {
+        return "No data";
+      }
+      // If it's a number, format it appropriately
+      if (typeof value === "number") {
+        // For very small numbers, show more decimals
+        if (Math.abs(value) < 1 && value !== 0) {
+          return value.toFixed(4);
+        }
+        // For whole numbers, show as integer
+        if (Number.isInteger(value)) {
+          return value.toString();
+        }
+        // For decimals, show 2 decimal places
+        return value.toFixed(2);
+      }
+      return String(value);
+    };
+
+    const specs = [
+      { label: "Length (mm)", key: "length" },
+      { label: "Inside Diameter (mm)", key: "inside_diameter" },
+      { label: "Outside Diameter (mm)", key: "outside_diameter" },
+      { label: "Flat Crush (kN/m)", key: "flat_crush" },
+      { label: "H2O (%)", key: "h20" },
+    ];
+
+    console.log("\n" + "=".repeat(80));
+    console.log(`CUSTOMER SPECIFICATIONS TABLE${orderNo ? ` - Order: ${orderNo}` : ""}`);
+    console.log("=".repeat(80));
+    console.log(
+      "Specification".padEnd(25) +
+      "Scoll Nominal".padEnd(18) +
+      "Max".padEnd(18) +
+      "Min"
+    );
+    console.log("-".repeat(80));
+
+    specs.forEach((spec) => {
+      const nominal = formatValue(nominal_data?.[spec.key]);
+      const max = formatValue(max_data?.[spec.key]);
+      const min = formatValue(min_data?.[spec.key]);
+
+      console.log(
+        spec.label.padEnd(25) +
+          nominal.padEnd(18) +
+          max.padEnd(18) +
+          min
+      );
+    });
+
+    console.log("=".repeat(80));
+    console.log("\n");
+
+    // Also log the raw data structure with foreign key references
+    console.log("Raw Data Structure (Foreign Key References):");
+    console.log("Article Nominal (tbl_article_nominal):", {
+      ...nominal_data,
+      flat_crush: nominal_data?.flat_crush ?? null,
+      h20: nominal_data?.h20 ?? null,
+    });
+    console.log("Article Max (tbl_article_max):", {
+      ...max_data,
+      flat_crush: max_data?.flat_crush ?? null,
+      h20: max_data?.h20 ?? null,
+    });
+    console.log("Article Min (tbl_article_min):", {
+      ...min_data,
+      flat_crush: min_data?.flat_crush ?? null,
+      h20: min_data?.h20 ?? null,
+    });
+    
+    // Additional info about flat_crush and h20
+    console.log("\nFlat Crush & H2O Details:");
+    console.log("  Nominal - Flat Crush:", nominal_data?.flat_crush ?? "null/undefined", "| H2O:", nominal_data?.h20 ?? "null/undefined");
+    console.log("  Max     - Flat Crush:", max_data?.flat_crush ?? "null/undefined", "| H2O:", max_data?.h20 ?? "null/undefined");
+    console.log("  Min     - Flat Crush:", min_data?.flat_crush ?? "null/undefined", "| H2O:", min_data?.h20 ?? "null/undefined");
+  };
+
   function calculateStats(data: Measurement[], field: keyof Measurement) {
     // returns the descriptive statistics of the order measurements
     const values = data
       .map((d) => d[field])
       .filter((v): v is number => typeof v === "number" && !isNaN(v) && v !== 0);
 
-    console.log(`calculateStats for ${field}:`, { values, data });
 
     if (values.length === 0) {
       return { mean: 0, min: 0, max: 0, stdDev: 0 };
@@ -344,20 +491,36 @@ export default function DownloadOrderListView({
     return imageUrl;
   }
 
-  const handleClick = async () => {
-    if (selectedOrders.length === 0) {
-      toast.error("Please select an order", { duration: 1000 });
-      return;
-    }
+  // Function to proceed with PDF generation (extracted from original handleClick)
+  const proceedWithPDFGeneration = async () => {
     setIsLoading(true);
     setButtonLabel("Downloading...");
     setIsDisabled(true);
     try {
       const pdfs: any[] = [];
 
+      // Flatten selected orders with their selected articles
+      // If multiple articles are selected for an order, generate multiple PDFs
+      const ordersToProcess: Array<{ order: any; article: any | null }> = [];
+      
+      selectedOrders.forEach((order: any) => {
+        const ofid = String(order.order_fabrication_control);
+        const selectedArticles = selectedArticlesByOfid[ofid];
+        
+        if (selectedArticles && Object.keys(selectedArticles).length > 0) {
+          // Generate a PDF for each selected article
+          Object.values(selectedArticles).forEach((article: any) => {
+            ordersToProcess.push({ order, article });
+          });
+        } else {
+          // No selection made, use order's default article (null means use order.tbl_article)
+          ordersToProcess.push({ order, article: null });
+        }
+      });
+
       await Promise.all(
-        selectedOrders.map(async (order: any) => {
-          // map over selected orders
+        ordersToProcess.map(async ({ order, article }) => {
+          // map over orders to process (may include multiple PDFs per order if multiple articles selected)
           const get = (v: any, fallback = "***") =>
             v === null || v === undefined || v === "" ? fallback : String(v);
 
@@ -386,38 +549,41 @@ export default function DownloadOrderListView({
           const orderNo = get(order.order_fabrication_control);
 
           // fetch measurements data
-          const measurementData = await GetMeasurementData(
-            get(order.id) as unknown as number
-          );
+          const orderId = get(order.id) as unknown as number;
           
-          console.log("Measurement data:", measurementData);
+          const measurementData = await GetMeasurementData(orderId);
 
-          // fetch customer specifications data
-          console.log("Order data for debugging:", order);
-          console.log("Article data:", order.tbl_article);
-          console.log("Article IDs:", {
-            nominal: order.tbl_article?.article_nominal,
-            min: order.tbl_article?.article_min,
-            max: order.tbl_article?.article_max
-          });
+          // Determine which article IDs to use
+          let nominalId: number | null = null;
+          let minId: number | null = null;
+          let maxId: number | null = null;
+          
+          if (article) {
+            // Use the selected article's IDs from modal
+            nominalId = article?.article_nominal || null;
+            minId = article?.article_min || null;
+            maxId = article?.article_max || null;
+          } else {
+            // Fallback to order's article if no selection made
+            nominalId = order.tbl_article?.article_nominal || null;
+            minId = order.tbl_article?.article_min || null;
+            maxId = order.tbl_article?.article_max || null;
+          }
           
           const customerSpecificationsData =
             await GetCustomerSpecificationsData(
-              get(order.tbl_article?.article_nominal) as unknown as number,
-              get(order.tbl_article?.article_min) as unknown as number,
-              get(order.tbl_article?.article_max) as unknown as number
+              nominalId ? Number(nominalId) : null,
+              minId ? Number(minId) : null,
+              maxId ? Number(maxId) : null
             );
 
           // customer specifications data
           const nominal_data = customerSpecificationsData[0] || {};
           const max_data = customerSpecificationsData[1] || {};
           const min_data = customerSpecificationsData[2] || {};
-          
-          console.log("Customer specifications data:", {
-            nominal: nominal_data,
-            max: max_data,
-            min: min_data
-          });
+
+          // Log formatted table of customer specifications
+          logCustomerSpecificationsTable(nominal_data, min_data, max_data, orderNo);
 
           // get all the descriptive statistics of the order for each measurement
           const orderLengthStats = calculateStats(measurementData, "length");
@@ -900,8 +1066,6 @@ export default function DownloadOrderListView({
             }))
             .sort((a: chartData, b: chartData) => a.palette_count - b.palette_count);
 
-          console.log("Length Data for chart:", lengthData);
-          console.log("Length Stats:", orderLengthStats);
 
           const lengthLineChartImage = await generateLineChartImage(
             canvasRef.current!,
@@ -911,14 +1075,18 @@ export default function DownloadOrderListView({
 
           // INSIDE DATA - sort by palette count in ascending order
           const insideData: chartData[] = measurementData // use the inside diameter data in the measurements table of the order ID
-            .map((insideInstance: any) => ({
-              data: insideInstance["inside_diameter"],
-              palette_count: Number(insideInstance["pallete_count"]),
-            }))
+            .map((insideInstance: any) => {
+              const insideDiameter = insideInstance["inside_diameter"];
+              const paletteCount = Number(insideInstance["pallete_count"]);
+              
+              return {
+                data: insideDiameter != null && insideDiameter !== '' ? Number(insideDiameter) : 0,
+                palette_count: paletteCount || 0,
+              };
+            })
+            .filter(item => item.palette_count > 0) // Filter out invalid palette counts
             .sort((a: chartData, b: chartData) => a.palette_count - b.palette_count);
 
-          console.log("Inside Data for chart:", insideData);
-          console.log("Inside Stats:", orderInsideDiameterStats);
 
           const insideLineChartImage = await generateLineChartImage(
             canvasRef.current!,
@@ -934,8 +1102,6 @@ export default function DownloadOrderListView({
             }))
             .sort((a: chartData, b: chartData) => a.palette_count - b.palette_count);
 
-          console.log("Outside Data for chart:", outsideData);
-          console.log("Outside Stats:", orderOutsideDiameterStats);
 
           const outsideLineChartImage = await generateLineChartImage(
             canvasRef.current!,
@@ -951,8 +1117,6 @@ export default function DownloadOrderListView({
             }))
             .sort((a: chartData, b: chartData) => a.palette_count - b.palette_count);
 
-          console.log("Flat Crush Data for chart:", flatCrushData);
-          console.log("Flat Crush Stats:", orderFlatCrushStats);
 
           const flatCrushLineChartImage = await generateLineChartImage(
             canvasRef.current!,
@@ -968,8 +1132,6 @@ export default function DownloadOrderListView({
             }))
             .sort((a: chartData, b: chartData) => a.palette_count - b.palette_count);
           
-          console.log("H2O Data for chart:", h2oData);
-          console.log("H2O Stats:", orderH2OStats);
 
           const h2oLineChartImage = await generateLineChartImage(
             canvasRef.current!,
@@ -1054,14 +1216,15 @@ export default function DownloadOrderListView({
           // Horizontal line below headers
           DrawHorizontalLine(doc, margin, 130);
 
-          // Draw the tables in page 03
+          // Draw the tables in page 03 (pass 2 as startPage since we just added a page, making it page 2)
           DrawMeasurementTables(
             doc,
             180,
             measurementData,
             company_name,
             orderNo,
-            current_date
+            current_date,
+            2 // Start on page 2 (the page we just added)
           );
 
           // Horizontal line for footer
@@ -1074,7 +1237,17 @@ export default function DownloadOrderListView({
             orderNo,
             current_date
           );
-          const pdfFileName = `quality_control_report_order_${orderNo}`;
+          
+          // Generate filename with article designation if article was selected
+          let pdfFileName = `quality_control_report_order_${orderNo}`;
+          if (article?.designated_article) {
+            // Sanitize the designated_article for filename (remove special chars, limit length)
+            const sanitizedDesignation = article.designated_article
+              .replace(/[^a-zA-Z0-9\s]/g, '_')
+              .replace(/\s+/g, '_')
+              .substring(0, 50);
+            pdfFileName = `quality_control_report_order_${orderNo}_${sanitizedDesignation}`;
+          }
 
           pdfs.push({ doc, filename: pdfFileName }); // collect blobs for zip
         })
@@ -1137,16 +1310,264 @@ export default function DownloadOrderListView({
     }
   };
 
+  // Modified handleClick to first fetch matching articles and show modal
+  const handleClick = async () => {
+    if (selectedOrders.length === 0) {
+      toast.error("Please select an order", { duration: 1000 });
+      return;
+    }
+
+    setIsFetchingMatches(true);
+    setIsLoading(true);
+    setButtonLabel("Checking matches...");
+
+    try {
+      // Fetch matching articles for each selected order
+      const matchesByOfid: Record<string, any[]> = {};
+
+      await Promise.all(
+        selectedOrders.map(async (order: any) => {
+          const ofid = order.order_fabrication_control;
+          if (ofid) {
+            const matches = await fetchMatchingArticles(String(ofid));
+            matchesByOfid[ofid] = matches;
+          }
+        })
+      );
+
+      // Reset selected articles when opening modal
+      setSelectedArticlesByOfid({});
+      
+      // Show modal with matching articles
+      setMatchingArticlesByOfid(matchesByOfid);
+      setIsModalOpen(true);
+      setIsLoading(false);
+      setButtonLabel("Download");
+      setIsFetchingMatches(false);
+      
+      return; // Don't proceed with PDF generation yet - user must click "Proceed"
+    } catch (error) {
+      console.error("Error fetching matching articles:", error);
+      toast.error("Failed to check matching articles");
+      setIsLoading(false);
+      setButtonLabel("Download");
+      setIsFetchingMatches(false);
+    }
+  };
+
+  // Function to handle article selection/deselection
+  const handleArticleToggle = (ofid: string, article: any) => {
+    setSelectedArticlesByOfid((prev) => {
+      const ofidSelections = prev[ofid] || {};
+      const articleId = article.id;
+      
+      if (ofidSelections[articleId]) {
+        // Deselect: remove from selection
+        const newOfidSelections = { ...ofidSelections };
+        delete newOfidSelections[articleId];
+        return {
+          ...prev,
+          [ofid]: Object.keys(newOfidSelections).length > 0 ? newOfidSelections : undefined,
+        };
+      } else {
+        // Select: add to selection
+        return {
+          ...prev,
+          [ofid]: {
+            ...ofidSelections,
+            [articleId]: article,
+          },
+        };
+      }
+    });
+  };
+
+  // Function to handle modal close and proceed with download
+  const handleModalProceed = () => {
+    setIsModalOpen(false);
+    // Clear selections after proceeding
+    setSelectedArticlesByOfid({});
+    proceedWithPDFGeneration();
+  };
+
+  // Function to handle modal cancel
+  const handleModalCancel = () => {
+    setIsModalOpen(false);
+    setIsLoading(false);
+    setButtonLabel("Download");
+    setIsFetchingMatches(false);
+    // Clear selections when canceling
+    setSelectedArticlesByOfid({});
+  };
+
   return (
     <div>
       <button
         onClick={handleClick}
-        disabled={isDisabled}
-        className={`btn ${className}`}
-        style={isDisabled ? { ...baseStyle, ...disabledStyle } : baseStyle}
+        disabled={isDisabled || isFetchingMatches}
+        className={`w-full px-3 py-2 rounded-lg font-bold text-xs transition-all duration-300 shadow-md hover:shadow-lg shrink-0 whitespace-nowrap transform hover:scale-105 active:scale-95 border ${className} ${
+          isDisabled || isFetchingMatches
+            ? "bg-gradient-to-r from-blue-900/50 to-blue-800/50 cursor-not-allowed text-white/70 border-blue-900/20"
+            : "bg-gradient-to-r from-blue-900 to-blue-800 hover:from-blue-800 hover:to-blue-900 text-white border-blue-700/30"
+        }`}
       >
-        {buttonLabel}
+        {isLoading && (
+          <svg
+            className="inline mr-2 h-4 w-4 animate-spin"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+            />
+          </svg>
+        )}
+        {isLoading ? "Generating PDF..." : isFetchingMatches ? "Checking matches..." : buttonLabel}
       </button>
+
+      {/* Modal for showing matching articles - rendered via portal outside flex container */}
+      {isModalOpen && mounted && typeof window !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={handleModalCancel}>
+          <div 
+            className="bg-white rounded-lg shadow-xl w-11/12 max-w-4xl max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-xl font-semibold text-gray-800">Select Article Designations</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Choose which article designations to include in the PDF reports
+              </p>
+            </div>
+            
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              {Object.entries(matchingArticlesByOfid).length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No orders to process</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {Object.entries(matchingArticlesByOfid).map(([ofid, articles]) => (
+                    <div key={ofid} className="border border-gray-200 rounded-lg p-5 bg-gray-50">
+                      <div className="flex items-center gap-2 mb-4">
+                        <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                        <h4 className="font-semibold text-base text-gray-800">
+                          Order Fabrication ID: <span className="text-blue-700">{ofid}</span>
+                        </h4>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        {articles.length === 0 ? (
+                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                            <p className="text-sm text-amber-800">
+                              No matching articles found. The order's default article will be used.
+                            </p>
+                          </div>
+                        ) : (
+                          articles.map((article) => {
+                            const isSelected = selectedArticlesByOfid[ofid]?.[article.id] !== undefined;
+                            return (
+                              <label
+                                key={article.id}
+                                className={`flex items-start gap-4 p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-md ${
+                                  isSelected 
+                                    ? 'bg-blue-50 border-blue-500 shadow-sm' 
+                                    : 'bg-white border-gray-200 hover:border-blue-300'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="checkbox checkbox-primary checkbox-sm mt-1"
+                                  checked={isSelected}
+                                  onChange={() => handleArticleToggle(ofid, article)}
+                                />
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {article.designated_article || 'No designation available'}
+                                  </p>
+                                  {article.article_name && (
+                                    <p className="text-xs text-gray-600 mt-1">
+                                      {article.article_name}
+                                    </p>
+                                  )}
+                                </div>
+                                {isSelected && (
+                                  <div className="text-blue-600">
+                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                    </svg>
+                                  </div>
+                                )}
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  {(() => {
+                    const totalSelected = Object.values(selectedArticlesByOfid).reduce(
+                      (sum, ofidSelections) => sum + Object.keys(ofidSelections || {}).length,
+                      0
+                    );
+                    return totalSelected > 0 
+                      ? (
+                        <span className="flex items-center gap-2">
+                          <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          <span className="font-medium text-gray-800">{totalSelected}</span>
+                          <span>article{totalSelected !== 1 ? 's' : ''} selected</span>
+                        </span>
+                      )
+                      : (
+                        <span className="text-gray-500">
+                          Using default article for each order
+                        </span>
+                      );
+                  })()}
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleModalCancel}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleModalProceed}
+                    className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                  >
+                    Proceed with Download
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       <canvas
         ref={canvasRef}
         // Match the PDF target aspect ratio (410x105) at 2x resolution for crispness
@@ -1154,14 +1575,6 @@ export default function DownloadOrderListView({
         height="210"
         style={{ display: "none" }}
       />
-      {isLoading && (
-        <div className="modal modal-open">
-          <div className="modal-box bg-white text-black flex flex-col items-center gap-4">
-            <span className="loading loading-spinner loading-lg text-primary" aria-hidden="true" />
-            <p className="text-center text-sm font-medium">Preparing reports. Please wait...</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
