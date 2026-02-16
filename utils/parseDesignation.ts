@@ -12,6 +12,8 @@
 export function normalizeText(str: string | null | undefined): string {
   if (!str) return "";
   return str
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
     .replace(/[^\w\s]/g, "") // Remove punctuation
     .replace(/\s+/g, " ") // Collapse multiple spaces
@@ -47,6 +49,8 @@ export function parseDesignation(
   // Remove common prefixes and suffixes that might interfere
   // Pattern: SP, VV, mm, AC followed by numbers, etc.
   let cleaned = designated_article.trim();
+  // Support European decimal commas across the full designation
+  cleaned = cleaned.replace(/,/g, ".");
 
   // Try to match pattern: [number] X [number]/[number] or [number] X [number] / [number]
   // Also handle variations like: [number]x[number]/[number] (no spaces)
@@ -180,5 +184,8 @@ export function matchDimensions(
     withinTolerance(prod.outside_diameter, parsed.outside_diameter)
   );
 }
+
+
+
 
 

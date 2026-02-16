@@ -30,7 +30,7 @@ export default function MeasurementListViewCopy(params: any) {
     };
 
     fetchUserEmail();
-  }, []);
+  }, [supabase.auth]);
 
  console.log("the user id is:", userID);
 
@@ -174,19 +174,19 @@ console.log("orders data  ",measurementsData);
                                   </Link> 
                                     
                     </div>
-                    <div className="text-black overflow-auto">
+                    <div className="text-black overflow-auto max-h-[60vh]">
                       <table className="table relative text-center overflow-auto">
                         <thead className="text-black text-sm">
                           <tr>
-                            <th>Pallete</th>
-                            <th>Number Of Controll</th>
-                            <th>Length</th>
-                            <th>Inside Diameter</th>
-                            <th>Outside Diameter</th>
-                            <th>Flat Crush</th>
-                            <th>H20</th>
-                            <th>Radial </th>
-                            <th>Remarks</th>
+                            <th className="sticky top-0 z-10 bg-white">Pallete</th>
+                            <th className="sticky top-0 z-10 bg-white">Number Of Controll</th>
+                            <th className="sticky top-0 z-10 bg-white">Length</th>
+                            <th className="sticky top-0 z-10 bg-white">Inside Diameter</th>
+                            <th className="sticky top-0 z-10 bg-white">Outside Diameter</th>
+                            <th className="sticky top-0 z-10 bg-white">Flat Crush</th>
+                            <th className="sticky top-0 z-10 bg-white">H₂O</th>
+                            <th className="sticky top-0 z-10 bg-white">Radial </th>
+                            <th className="sticky top-0 z-10 bg-white">Remarks</th>
                           
                           </tr>
                         </thead>

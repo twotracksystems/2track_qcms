@@ -48,7 +48,7 @@ export default function IndexHeader(){
       };
       
       fetchUserEmail();
-    }, []);
+    }, [supabase.auth]);
       const [userName, setUserName] = useState({ first: "", last: "" });
 
   useEffect(() => {

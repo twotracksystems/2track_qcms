@@ -191,6 +191,7 @@ export default function AddOrderList(params: any) {
                       </div>
                       <Field
                         type="date"
+                        lang="en-GB"
                         placeholder="Site Name: Example: EzMiner"
                         name="EntryDate"
                         className={`input input-bordered w-full max-w-md ${
@@ -227,6 +228,7 @@ export default function AddOrderList(params: any) {
                       </div>
                       <Field
                         type="date"
+                        lang="en-GB"
                         placeholder="Site Name: Example: EzMiner"
                         name="ExitDate"
                         className={`input input-bordered w-full max-w-md ${

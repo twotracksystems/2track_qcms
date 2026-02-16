@@ -37,22 +37,9 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (
-    !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/api/authentication") &&
-    !request.nextUrl.pathname.startsWith("/api/v1/test_production_by_ofid") &&
-    !request.nextUrl.pathname.startsWith("/api/v1/test_resolve_by_ofid") &&
-    !request.nextUrl.pathname.startsWith("/api/v1/test_supabase") &&
-    !request.nextUrl.pathname.startsWith("/api/v1/resolve_designated_article")
-  ) {
-    // no user, potentially respond by redirecting the user to the login page
+  if (request.nextUrl.pathname === "/") {
     const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
-  }else if(request.nextUrl.pathname=="/"){
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    url.pathname = "/dashboard/order_management";
     return NextResponse.redirect(url);
   }
 

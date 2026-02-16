@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { normalizeDecimalInput } from "@/utils/parseDecimal";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -29,6 +30,8 @@ export async function POST(req: NextRequest) {
     // Create Supabase client
     const supabase = await createClient();
 
+    const numberControlValue = normalizeDecimalInput(number_control);
+
     // Insert data without article_name first
     const { data: insertResult, error: insertError } = await supabase
       .from("tbl_article")
@@ -40,7 +43,7 @@ export async function POST(req: NextRequest) {
           article_nominal: article_nominal,
           article_min: article_min,
           article_max: article_max,
-          number_control: number_control || null,
+          number_control: numberControlValue ?? null,
           user_id: user_id,
           is_exist: true, // Always true
         },

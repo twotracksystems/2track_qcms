@@ -142,7 +142,7 @@ const id=params.params;
     inside_diameter: Yup.string().required("Inside Diameter is required"),
     outside_diameter: Yup.string().required("Outside Diameter is required"),
     flat_crush: Yup.string().required("Flat Crush is required"),
-    h20: Yup.string().required("H20 is required"),
+    h20: Yup.string().required("H₂O is required"),
     radial: Yup.string().required("Radial is required"),
     number_control: Yup.string().required("Number Control is required"), 
     remarks: Yup.string().required("Remarks is required"),
@@ -335,10 +335,10 @@ const id=params.params;
                     <label className="form-control w-96 max-w-lg">
                       <div className="label">
                         <span className="label-text font-bold gap-x-2 flex flex-row">
-                          H20
+                          H₂O
                           <span
                             className="tooltip tooltip-right"
-                            data-tip="H20 Field. This is required."
+                            data-tip="H₂O (humidity). This is required."
                           >
                             <CircleHelp
                               className=" my-auto"
@@ -350,7 +350,7 @@ const id=params.params;
                       </div>
                       <Field
                         type="text"
-                        placeholder="H20"
+                        placeholder="H₂O"
                         name="h20"
                         className={`input input-bordered w-full max-w-md ${
                           errors.h20 && touched.h20 ? "input-error" : ""

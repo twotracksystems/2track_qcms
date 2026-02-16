@@ -1,44 +1,118 @@
-import { createClient, roleExtractor } from "@/utils/supabase/server";
+import { createClient } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function PUT(req: NextRequest) {
+export async function DELETE(req: NextRequest) {
   try {
-    // Extract UUID from the request query
     const id = req.nextUrl.searchParams.get("id");
-   
+    if (!id) {
+      return NextResponse.json(
+        { error: "Order id is required" },
+        { status: 400 }
+      );
+    }
 
-    // Parse request body
-    const { is_exist } =
-      await req.json();
-
-    // Initialize Supabase client
     const supabase = await createClient();
 
-    // Verify user role
-    // const current_role = await roleExtractor(supabase);
-    // if (current_role !== "Super Admin") {
-    //   return NextResponse.json(
-    //     { error: "No permission to perform this action" },
-    //     { status: 401 }
-    //   );
-    // }
+    // Get ofid before deleting so we can cascade-delete measurements
+    const { data: prodRow, error: fetchError } = await supabase
+      .from("tbl_prod")
+      .select("ofid")
+      .eq("id", id)
+      .maybeSingle();
 
-    // Update user details in the database
-    const { data: userUpdateData, error: userUpdateError } = await supabase
-      .from("tbl_orders_form")
-      .update({ is_exist, updated_at: new Date() }).eq("id", id);
+    if (!fetchError && prodRow?.ofid) {
+      const { error: measDeleteError } = await supabase
+        .from("tbl_measurement_prod")
+        .delete()
+        .eq("ofid", prodRow.ofid);
+      if (measDeleteError) {
+        console.error("Supabase Delete Error (tbl_measurement_prod):", measDeleteError);
+        return NextResponse.json(
+          { error: `Failed to delete related measurements: ${measDeleteError.message}` },
+          { status: 500 }
+        );
+      }
+    }
 
-    if (userUpdateError) {
-      console.error("Supabase Update Error:", userUpdateError);
+    const { error: deleteError } = await supabase
+      .from("tbl_prod")
+      .delete()
+      .eq("id", id);
+
+    if (deleteError) {
+      console.error("Supabase Delete Error:", deleteError);
       return NextResponse.json(
-        { error: `Database update failed: ${userUpdateError.message}` },
+        { error: `Database delete failed: ${deleteError.message}` },
         { status: 500 }
       );
     }
 
-    // Return success response
     return NextResponse.json(
-      { message: "User updated successfully", data: userUpdateData },
+      { message: "Order deleted successfully" },
+      { status: 200 }
+    );
+  } catch (err: any) {
+    console.error("Unexpected Error:", err);
+    return NextResponse.json(
+      { error: "An unexpected error occurred", details: err.message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(req: NextRequest) {
+  try {
+    const id = req.nextUrl.searchParams.get("id");
+    if (!id) {
+      return NextResponse.json(
+        { error: "Order id is required" },
+        { status: 400 }
+      );
+    }
+
+    const { is_exist } = await req.json();
+
+    const supabase = await createClient();
+
+    // Hard delete: remove row from tbl_prod (no is_exist column), and cascade to tbl_measurement_prod
+    if (is_exist === false) {
+      // Get ofid before deleting so we can cascade-delete measurements
+      const { data: prodRow, error: fetchError } = await supabase
+        .from("tbl_prod")
+        .select("ofid")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (!fetchError && prodRow?.ofid) {
+        const { error: measDeleteError } = await supabase
+          .from("tbl_measurement_prod")
+          .delete()
+          .eq("ofid", prodRow.ofid);
+        if (measDeleteError) {
+          console.error("Supabase Delete Error (tbl_measurement_prod):", measDeleteError);
+          return NextResponse.json(
+            { error: `Failed to delete related measurements: ${measDeleteError.message}` },
+            { status: 500 }
+          );
+        }
+      }
+
+      const { error: deleteError } = await supabase
+        .from("tbl_prod")
+        .delete()
+        .eq("id", id);
+
+      if (deleteError) {
+        console.error("Supabase Delete Error:", deleteError);
+        return NextResponse.json(
+          { error: `Database delete failed: ${deleteError.message}` },
+          { status: 500 }
+        );
+      }
+    }
+
+    return NextResponse.json(
+      { message: "Order updated successfully" },
       { status: 200 }
     );
   } catch (err: any) {

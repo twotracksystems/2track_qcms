@@ -3,14 +3,13 @@ import React, { useEffect, useRef, useState } from "react";
 import { ErrorMessage, Field, FieldArray, Form, Formik } from "formik";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
-import { QueryClient, useMutation, useQuery } from "@tanstack/react-query";
-import { usePathname } from "next/navigation";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import Select from "react-select";
 import toast from "react-hot-toast";
-import { Pencil, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import * as Yup from "yup";
 import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
+import { normalizeDecimalInput } from "@/utils/parseDecimal";
 
 export default function EditArticleListCopy(params:any) {
   const router = useRouter();
@@ -26,7 +25,7 @@ export default function EditArticleListCopy(params:any) {
        };
        
        fetchUserEmail();
-     }, []);
+     }, [supabase.auth]);
        console.log("UserRole:", UserRole);
 
   const [initialValues,setInitialValues] = useState({ 
@@ -44,25 +43,50 @@ export default function EditArticleListCopy(params:any) {
         OutsideDiameterNominal: 0,
         OutsideDiameterMin: 0,
         OutsideDiameterMax: 0,
-        FlatCrushNominal: "0",
-        FlatCrushMin: "0",
-        FlatCrushMax: "0",
-        H20Nominal: 0,
-        H20Min: 0,
-        H20Max: 0,
-        RadialNominal:0,
-        RadialMin:0,
-        RadialMax:0,
+        ResistanceNominal: 0,
+        ResistanceMin: 0,
+        ResistanceMax: 0,
+        HumidityNominal: 0,
+        HumidityMin: 0,
+        HumidityMax: 0,
         NumberControl: 0,
       },
     ],
   });
 
+  const parseNumberValue = (value: string | number | null | undefined): number => {
+    const parsed = normalizeDecimalInput(value);
+    return parsed ?? 0;
+  };
+
+  const normalizeFlatCrushForDisplay = (
+    value: string | number | null | undefined
+  ): number | null => {
+    const normalized = normalizeDecimalInput(value);
+    if (normalized === null) return null;
+    return normalized > 1000 ? normalized / 1000 : normalized;
+  };
+
+  const normalizeFlatCrushForSave = (
+    value: string | number | null | undefined
+  ): number | null => {
+    const normalized = normalizeDecimalInput(value);
+    if (normalized === null) return null;
+    return normalized > 1000 ? normalized : normalized * 1000;
+  };
+  // Treat 0 and 0.000 as no value so single-value rule applies for resistance
+  const treatZeroAsNoValue = (value: number | null): number | null => {
+    if (value == null) return null;
+    if (typeof value === "number" && (value === 0 || Math.abs(value) < 1e-9)) return null;
+    return value;
+  };
+
+  const normalizeCompanyName = (value: string) => value.trim().toLowerCase();
+
     const validationSchema = Yup.object({
       rows: Yup.array().of(
         Yup.object().shape({
           article_name: Yup.string().required("Product Name is required"),
-          customer_id: Yup.string().required("Customer Name is required"),
           NumberControl: Yup.number().required("Number of Control is required"),
         })
       ),
@@ -100,123 +124,96 @@ export default function EditArticleListCopy(params:any) {
       setInitialValues((prev) => ({
         ...prev,
         number_control: user.number_control,
-        rows: prev.rows.map((row) => ({
-          ...row,
-          id_number: user.id_number,
-          customer_id: user.customer_id,
-          NumberControl: user.number_control,
-        })),
+        rows: prev.rows.map((row) => {
+          const hasIdNumber =
+            row.id_number !== "" && row.id_number !== null && row.id_number !== undefined;
+          const hasArticleName =
+            row.article_name !== "" && row.article_name !== null && row.article_name !== undefined;
+
+          return {
+            ...row,
+            id_number: hasIdNumber ? row.id_number : user.id_number,
+            article_name: hasArticleName ? row.article_name : (user.article_name ?? row.article_name),
+            customer_id: user.customer_id ? String(user.customer_id) : "",
+            NumberControl: user.number_control,
+          };
+        }),
       }));
       }
   }, [isArticleSuccess, articleData]);
   
   const {
-    data: nominalData,
-    isLoading: isNominalLoading,
-    isSuccess: isNominalSuccess,
-    isError: isNominalError,
+    data: articleProdData,
+    isSuccess: isArticleProdSuccess,
   } = useQuery({
-    queryKey: ["article_nominal", nominalID],
+    queryKey: ["article_prod", id],
     queryFn: async () => {
-      const response = await fetch(`/api/v1/getonearticlenominal/?id=${nominalID}`);
+      const response = await fetch(`/api/v1/getonearticleprod/?id=${id}`);
       if (!response.ok) {
-        throw new Error(`Failed to fetch user data: ${response.status}`);
+        throw new Error(`Failed to fetch article prod data: ${response.status}`);
       }
       return response.json(); // Expecting an array
     },
-    enabled: !!id, // Only fetch data if id exists
+    enabled: !!id,
   });
-  console.log("Gatherd data:", nominalData);
   useEffect(() => {
-      if (isNominalSuccess && nominalData?.length > 0) {
-        setInitialValues((prev) => ({
-          ...prev,
-          rows: prev.rows.map((row) => ({
-            ...row,
-            LengthNominal: nominalData[0].length,
-            InsideDiameterNominal: nominalData[0].inside_diameter,
-            OutsideDiameterNominal: nominalData[0].outside_diameter,
-            // FlatCrushNominal: parseFloat(parseFloat(nominalData[0].flat_crush).toFixed(2)),
-            FlatCrushNominal: parseFloat(nominalData[0].flat_crush).toFixed(2),
-            H20Nominal: nominalData[0].h20,
-            RadialNominal: nominalData[0].radial,
-          })),
-        }));
-      }
-    }, [isNominalSuccess, nominalData]);
-  
-
-  const {
-    data: minData,
-    isLoading: isMinLoading,
-    isSuccess: isMinSuccess,
-    isError: isMinError,
-    error: userError,
-  } = useQuery({
-    queryKey: ["article_min",minID],
-    queryFn: async () => {
-      const response = await fetch(`/api/v1/getonearticlemin/?id=${minID}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch user data: ${response.status}`);
-      }
-      return response.json(); // Expecting an array
-    },
-    enabled: !!id, // Only fetch data if id exists
-  });
-  console.log("Gatherd data:", minData);
-  useEffect(() => {
-      if (isMinSuccess && minData?.length > 0) {
-        setInitialValues((prev) => ({
-          ...prev,
-          rows: prev.rows.map((row) => ({
-            ...row,
-            LengthMin: minData[0].length,
-            InsideDiameterMin: minData[0].inside_diameter,
-            OutsideDiameterMin: minData[0].outside_diameter,
-            // FlatCrushMin: Number(minData[0].flat_crush),
-            FlatCrushMin: parseFloat(minData[0].flat_crush).toFixed(2),
-            H20Min: minData[0].h20,
-            RadialMin: minData[0].radial,
-          })),
-        }));
-      }
-    }, [isMinSuccess, minData]);
-
-  const {
-    data: maxData,
-    isLoading: isMaxLoading,
-    isSuccess: isMaxSuccess,
-    isError: isMaxError,
-    error: maxError,
-  } = useQuery({
-    queryKey: ["article_max", maxID],
-    queryFn: async () => {
-      const response = await fetch(`/api/v1/getonearticlemax/?id=${maxID}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch user data: ${response.status}`);
-      }
-      return response.json(); // Expecting an array
-    },
-    enabled: !!id, // Only fetch data if id exists
-  });
-  console.log("Gatherd data:", maxData);
-  useEffect(() => {
-      if (isMaxSuccess && maxData?.length > 0) {
-        setInitialValues((prev) => ({
-          ...prev,
-          rows: prev.rows.map((row) => ({
-            ...row,
-            LengthMax: maxData[0].length,
-            InsideDiameterMax: maxData[0].inside_diameter,
-            OutsideDiameterMax: maxData[0].outside_diameter,
-            // FlatCrushMax: Number(maxData[0].flat_crush),
-            FlatCrushMax: parseFloat(maxData[0].flat_crush).toFixed(2),
-            H20Max: maxData[0].h20,
-            RadialMax: maxData[0].radial,
-          })),
-        }));
-      }
-    }, [isMaxSuccess, maxData]);
+    if (isArticleProdSuccess && articleProdData?.length > 0) {
+      const prod = articleProdData[0];
+      // Resistance: if only one value (min or max), use it for min, max, and nominal; if both min and max, leave nominal blank. Treat 0 as no value.
+      const resistanceMin = treatZeroAsNoValue(normalizeFlatCrushForDisplay(prod.resistance_min));
+      const resistanceMax = treatZeroAsNoValue(normalizeFlatCrushForDisplay(prod.resistance_max));
+      const hasResistanceMin = resistanceMin != null;
+      const hasResistanceMax = resistanceMax != null;
+      const resistanceNominal =
+        hasResistanceMin && hasResistanceMax
+          ? null
+          : hasResistanceMin
+            ? resistanceMin
+            : hasResistanceMax
+              ? resistanceMax
+              : normalizeFlatCrushForDisplay(prod.resistance);
+      const resistanceMinDisplay = hasResistanceMin ? resistanceMin : (hasResistanceMax ? resistanceMax : null);
+      const resistanceMaxDisplay = hasResistanceMax ? resistanceMax : (hasResistanceMin ? resistanceMin : null);
+      // Humidity (H2O): same logic as resistance - single value → use for nominal/min/max; both → nominal blank; treat 0 as no value
+      const humidityMin = treatZeroAsNoValue(parseNumberValue(prod.humidty_min));
+      const humidityMax = treatZeroAsNoValue(parseNumberValue(prod.humidity_max));
+      const hasHumidityMin = humidityMin != null;
+      const hasHumidityMax = humidityMax != null;
+      const humidityNominal =
+        hasHumidityMin && hasHumidityMax
+          ? null
+          : hasHumidityMin
+            ? humidityMin
+            : hasHumidityMax
+              ? humidityMax
+              : parseNumberValue(prod.humidity);
+      const humidityMinDisplay = hasHumidityMin ? humidityMin : (hasHumidityMax ? humidityMax : null);
+      const humidityMaxDisplay = hasHumidityMax ? humidityMax : (hasHumidityMin ? humidityMin : null);
+      setInitialValues((prev) => ({
+        ...prev,
+        rows: prev.rows.map((row) => ({
+          ...row,
+          id_number: String(prod.article || row.id_number || ""),
+          article_name: String(prod.article_name ?? row.article_name ?? ""),
+          LengthNominal: parseNumberValue(prod.length),
+          InsideDiameterNominal: parseNumberValue(prod.inside_diameter),
+          OutsideDiameterNominal: parseNumberValue(prod.outside_diameter),
+          ResistanceNominal: resistanceNominal ?? 0,
+          HumidityNominal: humidityNominal ?? 0,
+          LengthMin: parseNumberValue(prod.length_min),
+          InsideDiameterMin: parseNumberValue(prod.inside_diameter_min),
+          OutsideDiameterMin: parseNumberValue(prod.outside_diameter_min),
+          ResistanceMin: resistanceMinDisplay ?? 0,
+          HumidityMin: humidityMinDisplay ?? 0,
+          LengthMax: parseNumberValue(prod.length_max),
+          InsideDiameterMax: parseNumberValue(prod.inside_diameter_max),
+          OutsideDiameterMax: parseNumberValue(prod.outside_diameter_max),
+          ResistanceMax: resistanceMaxDisplay ?? 0,
+          HumidityMax: humidityMaxDisplay ?? 0,
+        })),
+      }));
+    }
+  }, [isArticleProdSuccess, articleProdData]);
 
   const UpdateNominalMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -379,12 +376,42 @@ export default function EditArticleListCopy(params:any) {
     
     console.log("Customer Data:", customerData);
   
-    const customerOptions =
-      customerData?.data?.map((customer: any) => ({
-        value: customer.id,
-        label: `${customer.company_name}`,
-      })) || [];
-  
+    useEffect(() => {
+      if (!isArticleProdSuccess || !articleProdData?.length || !customerData?.data?.length) {
+        return;
+      }
+
+      const prod = articleProdData[0];
+      const prodCustomerName = prod?.article_name ? String(prod.article_name) : "";
+      if (!prodCustomerName) {
+        return;
+      }
+
+      const matchedCustomer = customerData.data.find((customer: any) => {
+        return normalizeCompanyName(customer.company_name) === normalizeCompanyName(prodCustomerName);
+      });
+
+      if (!matchedCustomer) {
+        return;
+      }
+
+      const nextCustomerId = String(matchedCustomer.id);
+      setInitialValues((prev) => {
+        const currentCustomerId = prev.rows[0]?.customer_id ? String(prev.rows[0].customer_id) : "";
+        if (currentCustomerId === nextCustomerId) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          rows: prev.rows.map((row) => ({
+            ...row,
+            customer_id: nextCustomerId,
+          })),
+        };
+      });
+    }, [isArticleProdSuccess, articleProdData, customerData]);
+
   
   return (
     <div className="flex flex-col w-full px-6 py-4 text-black">
@@ -394,41 +421,32 @@ export default function EditArticleListCopy(params:any) {
           validationSchema={validationSchema}
           enableReinitialize={true}
           onSubmit={async (values) => {
-  const mutationPromises = values.rows.map((row) =>
-    Promise.all([
+  const mutationPromises = values.rows.map((row) => {
+    const length = normalizeDecimalInput(row.LengthNominal);
+    const insideDiameter = normalizeDecimalInput(row.InsideDiameterNominal);
+    const outsideDiameter = normalizeDecimalInput(row.OutsideDiameterNominal);
+    const resistance = normalizeFlatCrushForSave(row.ResistanceNominal);
+    const humidity = normalizeDecimalInput(row.HumidityNominal);
+    const numberControl = normalizeDecimalInput(row.NumberControl);
+
+    return Promise.all([
       UpdateNominalMutation.mutateAsync({
-        length: row.LengthNominal,
-        inside_diameter: row.InsideDiameterNominal,
-        outside_diameter: row.OutsideDiameterNominal,
-        flat_crush: row.FlatCrushNominal,
-        h20: row.H20Nominal,
-        radial:row.RadialNominal,
+        length,
+        inside_diameter: insideDiameter,
+        outside_diameter: outsideDiameter,
+        resistance,
+        humidity,
       }),
-      UpdateMinMutation.mutateAsync({
-        length: row.LengthMin,
-        inside_diameter: row.InsideDiameterMin,
-        outside_diameter: row.OutsideDiameterMin,
-        flat_crush: row.FlatCrushMin,
-        h20: row.H20Min,
-        radial:row.RadialMin,
-      }),
-      UpdateMaxMutation.mutateAsync({
-        length: row.LengthMax,
-        inside_diameter: row.InsideDiameterMax,
-        outside_diameter: row.OutsideDiameterMax,
-        flat_crush: row.FlatCrushMax,
-        h20: row.H20Max,
-        radial:row.RadialMax,
-      }),
+      // Min and Max are now part of the same article_prod record
+      // Update article_prod with all values at once
       UpdateArticleMutation.mutateAsync({
         id_number: row.id_number,
+        article_name: row.article_name,
         customer_id: row.customer_id,
-        number_control: row.NumberControl,
+        number_control: numberControl,
       }),
-      
-    ])
-
-  );
+    ]);
+  });
 
   await Promise.all(mutationPromises);
 
@@ -473,27 +491,22 @@ export default function EditArticleListCopy(params:any) {
                             </div>
                             <div className="flex flex-col gap-2">
                               <label className="text-sm font-semibold text-gray-700">Customer Name</label>
-                              <Select
-                                name={`rows.${index}.customer_id`}
-                                placeholder="Select Customer"
-                                options={customerOptions}
-                                value={customerOptions.find((opt: any) => opt.value === row.customer_id) || null}
-                                onChange={(option: any) => {
-                                  setFieldValue(
-                                    `rows.${index}.customer_id`,
-                                    option.value
-                                  );
-                                }}
-                                className={`text-sm mt-1 bg-white w-full${
-                                  typeof errors.rows?.[index] === "object" &&
-                                  errors.rows?.[index]?.customer_id &&
-                                  touched.rows?.[index]?.customer_id
-                                    ? "border-red-500"
-                                    : ""
-                                }`}
+                              <Field
+                                name={`rows.${index}.article_name`}
+                                type="text"
+                                placeholder="Customer Name"
+                                className={`input input-bordered w-full
+                                  ${
+                                    typeof errors.rows?.[index] === "object" &&
+                                    errors.rows?.[index]?.article_name &&
+                                    touched.rows?.[index]?.article_name
+                                      ? "border-red-500"
+                                      : ""
+                                  } 
+                                `}
                               />
                               <ErrorMessage
-                                name={`rows.${index}.customer_id`}
+                                name={`rows.${index}.article_name`}
                                 component="div"
                                 className="text-red-500 text-xs"
                               />
@@ -502,7 +515,9 @@ export default function EditArticleListCopy(params:any) {
                               <label className="text-sm font-semibold text-gray-700">Number of Control</label>
                               <Field
                                 name={`rows.${index}.NumberControl`}
-                                type="number"
+                                type="text"
+                                inputMode="decimal"
+                                pattern="[0-9.,-]*"
                                 placeholder="Enter Number Of Control"
                                 className={`input input-bordered w-full ${
                                   typeof errors.rows?.[index] === "object" &&
@@ -541,21 +556,27 @@ export default function EditArticleListCopy(params:any) {
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.LengthNominal`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.LengthMin`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.LengthMax`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
@@ -565,21 +586,27 @@ export default function EditArticleListCopy(params:any) {
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.InsideDiameterNominal`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.InsideDiameterMin`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.InsideDiameterMax`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
@@ -589,21 +616,27 @@ export default function EditArticleListCopy(params:any) {
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.OutsideDiameterNominal`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.OutsideDiameterMin`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.OutsideDiameterMax`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
@@ -611,71 +644,89 @@ export default function EditArticleListCopy(params:any) {
                                   <tr className="hover:bg-blue-50/50 transition-colors duration-200">
                                     <td className="px-4 py-3 text-xs font-semibold text-gray-700 whitespace-nowrap bg-gray-50">Flat Crush</td>
                                     <td className="px-4 py-3">
-                                      <Field
-                                        name={`rows.${index}.FlatCrushNominal`}
-                                        type="number"
-                                        className="input input-bordered w-full text-xs"
-                                      />
+                                      <Field name={`rows.${index}.ResistanceNominal`}>
+                                        {({ field }: { field: any }) => (
+                                          <input
+                                            {...field}
+                                            type="text"
+                                            inputMode="decimal"
+                                            pattern="[0-9.,-]*"
+                                            className="input input-bordered w-full text-xs"
+                                            onBlur={(event) => {
+                                              field.onBlur(event);
+                                              const normalized = normalizeFlatCrushForDisplay(event.target.value);
+                                              if (normalized === null) return;
+                                              setFieldValue(field.name, normalized);
+                                            }}
+                                          />
+                                        )}
+                                      </Field>
                                     </td>
                                     <td className="px-4 py-3">
-                                      <Field
-                                        name={`rows.${index}.FlatCrushMin`}
-                                        type="number"
-                                        className="input input-bordered w-full text-xs"
-                                      />
+                                      <Field name={`rows.${index}.ResistanceMin`}>
+                                        {({ field }: { field: any }) => (
+                                          <input
+                                            {...field}
+                                            type="text"
+                                            inputMode="decimal"
+                                            pattern="[0-9.,-]*"
+                                            className="input input-bordered w-full text-xs"
+                                            onBlur={(event) => {
+                                              field.onBlur(event);
+                                              const normalized = normalizeFlatCrushForDisplay(event.target.value);
+                                              if (normalized === null) return;
+                                              setFieldValue(field.name, normalized);
+                                            }}
+                                          />
+                                        )}
+                                      </Field>
                                     </td>
                                     <td className="px-4 py-3">
-                                      <Field
-                                        name={`rows.${index}.FlatCrushMax`}
-                                        type="number"
-                                        className="input input-bordered w-full text-xs"
-                                      />
+                                      <Field name={`rows.${index}.ResistanceMax`}>
+                                        {({ field }: { field: any }) => (
+                                          <input
+                                            {...field}
+                                            type="text"
+                                            inputMode="decimal"
+                                            pattern="[0-9.,-]*"
+                                            className="input input-bordered w-full text-xs"
+                                            onBlur={(event) => {
+                                              field.onBlur(event);
+                                              const normalized = normalizeFlatCrushForDisplay(event.target.value);
+                                              if (normalized === null) return;
+                                              setFieldValue(field.name, normalized);
+                                            }}
+                                          />
+                                        )}
+                                      </Field>
                                     </td>
                                   </tr>
                                   <tr className="hover:bg-blue-50/50 transition-colors duration-200">
                                     <td className="px-4 py-3 text-xs font-semibold text-gray-700 whitespace-nowrap bg-gray-50">H₂O</td>
                                     <td className="px-4 py-3">
                                       <Field
-                                        name={`rows.${index}.H20Nominal`}
-                                        type="number"
+                                        name={`rows.${index}.HumidityNominal`}
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
                                     <td className="px-4 py-3">
                                       <Field
-                                        name={`rows.${index}.H20Min`}
-                                        type="number"
+                                        name={`rows.${index}.HumidityMin`}
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
                                     <td className="px-4 py-3">
                                       <Field
-                                        name={`rows.${index}.H20Max`}
-                                        type="number"
-                                        className="input input-bordered w-full text-xs"
-                                      />
-                                    </td>
-                                  </tr>
-                                  <tr className="hover:bg-blue-50/50 transition-colors duration-200">
-                                    <td className="px-4 py-3 text-xs font-semibold text-gray-700 whitespace-nowrap bg-gray-50">Radial</td>
-                                    <td className="px-4 py-3">
-                                      <Field
-                                        name={`rows.${index}.RadialNominal`}
-                                        type="number"
-                                        className="input input-bordered w-full text-xs"
-                                      />
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      <Field
-                                        name={`rows.${index}.RadialMin`}
-                                        type="number"
-                                        className="input input-bordered w-full text-xs"
-                                      />
-                                    </td>
-                                    <td className="px-4 py-3">
-                                      <Field
-                                        name={`rows.${index}.RadialMax`}
-                                        type="number"
+                                        name={`rows.${index}.HumidityMax`}
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>

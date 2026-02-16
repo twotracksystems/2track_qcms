@@ -2,14 +2,15 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Field, Form, Formik } from "formik";
-import { CircleCheckBig, CircleHelp, Plus, TriangleAlert } from "lucide-react";
+import { CircleHelp, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import * as Yup from "yup";
-import { FormInput,FormSearchableSelect, FormSelect } from "../UI/FormInput";
-import { useState, useEffect } from "react";
+import { FormInput, FormSearchableSelect } from "../UI/FormInput";
+import { useState, useRef, useCallback } from "react";
 import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
+import AsyncSelect from "react-select/async";
 export default function AddOrderList() {
   const navigator = useRouter();
   useEscapeNavigation("/dashboard/order_management");
@@ -32,10 +33,14 @@ export default function AddOrderList() {
         },
         body: JSON.stringify(data),
       });
-      return response.json();
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error ?? "Failed to add order");
+      }
+      return result;
     },
-    onError: (error) => {
-      toast.error("Failed to add order");
+    onError: (error: Error) => {
+      toast.error(error.message ?? "Failed to add order");
       console.error(error);
     },
     onSuccess: (data) => {
@@ -87,39 +92,6 @@ export default function AddOrderList() {
     })) || [];
 
   const {
-    data: articleData,
-    isFetching: isFetchingArticles,
-    isError: isErrorArticles,
-  } = useQuery({
-    queryKey: ["get_article", page, search, limit],
-    queryFn: async () => {
-      const response = await fetch(
-        `/api/v1/get_article?page=${page}&search=${search}&limit=${limit}`,
-        {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch customers");
-      }
-
-      return response.json();
-    },
-    staleTime: 5000, // Avoid flickering on refetch
-    retry: 2,
-  });
-
-  const articleOptions =
-    articleData?.data.map((article: any) => ({
-      value: article.id,
-      label: `${article.id_number}`,
-    })) || [];
-
-  const {
     data: assigneeData,
     isFetching: isFetchingAssignees,
     isError: isErrorAssignees,
@@ -152,6 +124,35 @@ export default function AddOrderList() {
       label: `${assignee.first_name} ${assignee.last_name}`,
     })) || [];
 
+  const articleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadArticleOptions = useCallback(
+    (inputValue: string): Promise<{ value: string; label: string }[]> =>
+      new Promise((resolve) => {
+        if (articleDebounceRef.current) {
+          clearTimeout(articleDebounceRef.current);
+        }
+        articleDebounceRef.current = setTimeout(async () => {
+          const search = (inputValue || "").trim();
+          const url = `/api/v1/get_article_prod_options?search=${encodeURIComponent(search)}&limit=50`;
+          try {
+            const res = await fetch(url, { method: "GET", headers: { Accept: "application/json" } });
+            if (!res.ok) {
+              resolve([]);
+              return;
+            }
+            const json = await res.json();
+            const options = (json?.data || []).map((row: { id: number; article: string | number }) => ({
+              value: String(row.id),
+              label: String(row.article ?? ""),
+            }));
+            resolve(options);
+          } catch {
+            resolve([]);
+          }
+        }, 300);
+      }),
+    []
+  );
 
   return (
     <div className="overflow-x-auto w-full text-black">
@@ -167,6 +168,7 @@ export default function AddOrderList() {
             // product_name: "",
             CustomerName: "",
             ArticleName: "",
+            ArticleNameLabel: "", // display label (article number) so we show "7440518" not "1"
             // AssigneeName: "",
             PalleteCount: "",
           }}
@@ -182,7 +184,7 @@ export default function AddOrderList() {
             });
           }}
         >
-          {({ errors, touched, values }) => (
+          {({ errors, touched, values, setFieldValue, setValues }) => (
             <Form>
               <div className="flex flex-col gap-y-3">
                 {/* Form Container with matching styling */}
@@ -215,15 +217,43 @@ export default function AddOrderList() {
                     </div>
                     <div>
                       <label className="form-control w-full max-w-lg">
-                        <FormSearchableSelect
-                          name="ArticleName"
-                          label="ID Article"
-                          placeholder="Choose a ID Article"
-                          tooltip="Select the ID Article from dropdown"
-                          errors={errors.ArticleName}
-                          touched={touched.ArticleName ? "true" :"" } // Adjust as needed
-                          options={articleOptions}
+                        <div className="label">
+                          <span className="label-text font-bold gap-x-2 flex flex-row">
+                            ID Article
+                            <span className="tooltip tooltip-right" data-tip="Select the ID Article from dropdown (search by article number or designation)">
+                              <CircleHelp className="my-auto" size={20} strokeWidth={0.75} />
+                            </span>
+                          </span>
+                        </div>
+                        <AsyncSelect
+                          instanceId="add-order-article-select"
+                          loadOptions={loadArticleOptions}
+                          defaultOptions
+                          cacheOptions
+                          value={
+                            values.ArticleName
+                              ? {
+                                  value: values.ArticleName,
+                                  label: values.ArticleNameLabel || values.ArticleName,
+                                }
+                              : null
+                          }
+                          onChange={(selected) => {
+                            setValues((prev) => ({
+                              ...prev,
+                              ArticleName: selected ? selected.value : "",
+                              ArticleNameLabel: selected ? selected.label : "",
+                            }));
+                          }}
+                          placeholder="Choose a ID Article (type to search)"
+                          className="text-lg bg-white select-bordered mx-auto w-full max-w-md"
+                          classNamePrefix="react-select"
                         />
+                        {errors.ArticleName && touched.ArticleName ? (
+                          <span className="text-error flex flex-row">{errors.ArticleName}</span>
+                        ) : (
+                          <span className="text-error invisible flex flex-row">Error</span>
+                        )}
                       </label>
                     </div>
                     <div>

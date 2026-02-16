@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import autoTable, { RowInput } from "jspdf-autotable";
+import { formatNumberWithDecimals } from "@/utils/formatNumber";
 
 /**
  * Draws a page header with centered text
@@ -86,9 +87,9 @@ export function DrawHorizontalLine(
 ) {
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  // Horizontal line separator with dark blue color
+  // Horizontal line separator with dark blue color (thin line for uniformity)
   doc.setDrawColor(30, 58, 138); // Dark blue color
-  doc.setLineWidth(2);
+  doc.setLineWidth(1);
   doc.line(margin, margin + y, pageWidth - margin, margin + y);
 }
 
@@ -125,30 +126,34 @@ export function DrawGraphLabel(
 
   let label: string[] = [];
 
+  // Chart spacing: each chart needs ~120px vertical space (105px height + 15px spacing)
+  const chartSpacing = 120;
+  const firstChartStart = margin + 150;
+  
   switch (section) {
     case "length":
       label = ["Länge", "Longueur", "Length", "mm"];
       label_y_pos = margin + 170;
-      chart_y_pos = margin + 150;
+      chart_y_pos = firstChartStart;
       break;
     case "inside":
       label = ["Innen Ø", "Ø Intérieur", "Inside Ø", "mm"];
-      label_y_pos = margin + 280;
-      chart_y_pos = margin + 260;
+      label_y_pos = firstChartStart + chartSpacing + 20;
+      chart_y_pos = firstChartStart + chartSpacing;
       break;
     case "outside":
       label = ["Aussen Ø", "Ø Extérieur", "Outside Ø", "mm"];
-      label_y_pos = margin + 390;
-      chart_y_pos = margin + 370;
+      label_y_pos = firstChartStart + (chartSpacing * 2) + 20;
+      chart_y_pos = firstChartStart + (chartSpacing * 2);
       break;
     case "flat_crush":
       label = ["Flat Crush", "(kN / dm)"];
-      label_y_pos = margin + 500;
-      chart_y_pos = margin + 480;
+      label_y_pos = firstChartStart + (chartSpacing * 3) + 20;
+      chart_y_pos = firstChartStart + (chartSpacing * 3);
       break;
     case "h2o":
-      label_y_pos = margin + 610;
-      chart_y_pos = margin + 590;
+      label_y_pos = firstChartStart + (chartSpacing * 4) + 20;
+      chart_y_pos = firstChartStart + (chartSpacing * 4);
       WriteH2OBold(doc, label_x_pos, label_y_pos);
       break;
   }
@@ -198,75 +203,140 @@ export function DrawFooter(
   });
 }
 
+/**
+ * Draws the page-1 style footer: thin line above, then three columns:
+ * Left: "Datum / Date" + date; Center: customer + "Unterschrift / Signature"; Right: "Document synthèse".
+ * Positioned at bottom of page for use on any page.
+ */
+export function DrawPage1StyleFooter(
+  doc: jsPDF,
+  margin: number = 40,
+  date: string = "",
+  customer: string = ""
+) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  const footerTableWidth = pageWidth - 2 * margin;
+  const footerColWidth = Math.floor(footerTableWidth / 3);
+  const footerRowHeight = 15;
+  const footerTableHeight = footerRowHeight * 2;
+  const lineY = pageHeight - margin - footerTableHeight - 25;
+  const footerTableY = pageHeight - margin - footerTableHeight - 5;
+
+  // Line above footer
+  doc.setDrawColor(30, 58, 138);
+  doc.setLineWidth(1);
+  doc.line(margin, lineY, pageWidth - margin, lineY);
+
+  const fColX1 = margin;
+  const fColX2 = fColX1 + footerColWidth;
+  const fColX3 = fColX2 + footerColWidth;
+
+  doc.setFont("times", "italic");
+  doc.setFontSize(10);
+  doc.text("Datum / Date", fColX1 + 8, footerTableY + 15);
+
+  doc.setFont("times", "bolditalic");
+  doc.text(`${date}`, fColX1 + 8, footerTableY + footerRowHeight + 15);
+
+  doc.setFont("times", "italic");
+  doc.text(`${customer}`, fColX2 + 8, footerTableY + 15, { align: "center" });
+  doc.text(
+    "Unterschrift / Signature",
+    fColX2 + 8,
+    footerTableY + footerRowHeight + 15,
+    { align: "center" }
+  );
+
+  doc.setFont("times", "bold");
+  doc.text(
+    "Document synthèse",
+    fColX3 + footerColWidth / 2,
+    footerTableY + footerRowHeight,
+    { align: "center" }
+  );
+}
+
+export type H2OLabelStyle = "normal" | "bold" | "italic" | "bolditalic";
+
+/**
+ * Draw "H₂O (%)" with manual subscript (H, small 2 lower, O (%)) so it renders
+ * correctly in PDF without relying on Unicode subscript in the font.
+ */
+export function drawH2OLabel(
+  doc: jsPDF,
+  x: number,
+  y: number,
+  options: {
+    fontSize?: number;
+    style?: H2OLabelStyle;
+    subscriptOffset?: number;
+    subscriptSizeRatio?: number;
+    centered?: boolean;
+    cellWidth?: number;
+  } = {}
+) {
+  const fontSize = options.fontSize ?? 12;
+  const style = options.style ?? "normal";
+  const subOffset = options.subscriptOffset ?? 2.5;
+  const subRatio = options.subscriptSizeRatio ?? 0.7;
+  const subSize = Math.max(6, fontSize * subRatio);
+
+  doc.setFont("times", style);
+  doc.setFontSize(fontSize);
+  const wH = doc.getTextWidth("H");
+  doc.setFontSize(subSize);
+  const w2 = doc.getTextWidth("2");
+  doc.setFontSize(fontSize);
+  const wO = doc.getTextWidth("O (%)");
+  const totalWidth = wH + w2 + wO;
+
+  let startX = x;
+  if (options.centered && options.cellWidth != null) {
+    startX = x + (options.cellWidth - totalWidth) / 2;
+  }
+
+  doc.setFontSize(fontSize);
+  doc.setFont("times", style);
+  doc.text("H", startX, y);
+
+  doc.setFontSize(subSize);
+  doc.setFont("times", style);
+  doc.text("2", startX + wH, y + subOffset);
+
+  doc.setFontSize(fontSize);
+  doc.setFont("times", style);
+  doc.text("O (%)", startX + wH + w2, y);
+}
+
 export function WriteH2OBold(doc: jsPDF, x: number, y: number) {
-  // Base font size
-  doc.setFontSize(12);
-  doc.setFont("times", "bold");
-
-  // Write "H"
-  doc.text("H", x, y);
-
-  // Write "2" smaller and lower (subscript)
-  doc.setFontSize(8);
-  doc.setFont("times", "bold");
-  doc.text("2", x + 8, y + 2); // adjust x,y offset as needed
-
-  // Back to normal for "O"
-  doc.setFontSize(12);
-  doc.setFont("times", "bold");
-  doc.text("O", x + 12, y);
+  drawH2OLabel(doc, x, y, { fontSize: 12, style: "bold" });
 }
 
 export function WriteH2OItalic(doc: jsPDF, x: number, y: number) {
-  // Base font size
-  doc.setFontSize(12);
-  doc.setFont("times", "italic");
-
-  // Write "H"
-  doc.text("H", x, y);
-
-  // Write "2" smaller and lower (subscript)
-  doc.setFontSize(8);
-  doc.setFont("times", "italic");
-  doc.text("2", x + 7, y + 2); // adjust x,y offset as needed
-
-  // Back to normal for "O"
-  doc.setFontSize(12);
-  doc.setFont("times", "italic");
-  doc.text("O (%)", x + 11, y);
+  drawH2OLabel(doc, x, y, { fontSize: 12, style: "italic" });
 }
 
 /**
- * Custom function to render H₂O table header with proper subscript
+ * Render "H₂O (%)" table header for customer specification (humidity), centered in cell.
  */
 export function renderH2OTableHeader(doc: jsPDF, x: number, y: number, width: number) {
-  // Calculate center position for the header
-  const centerX = x + width / 2;
-  const centerY = y + 6; // Adjust vertical position
-  
-  // Write "H"
-  doc.setFontSize(10);
-  doc.setFont("times", "bolditalic");
-  doc.text("H", centerX - 8, centerY);
-
-  // Write "2" smaller and lower (subscript) - make it more subscript-like
-  doc.setFontSize(6); // Even smaller
-  doc.setFont("times", "bolditalic");
-  doc.text("2", centerX - 1, centerY + 3); // Lower position for proper subscript
-
-  // Back to normal for "O"
-  doc.setFontSize(10);
-  doc.setFont("times", "bolditalic");
-  doc.text("O (%)", centerX + 3, centerY);
+  const centerY = y + 6;
+  drawH2OLabel(doc, x, centerY, {
+    fontSize: 10,
+    style: "bolditalic",
+    centered: true,
+    cellWidth: width,
+  });
 }
 
 type TableHead = string[][];
 type TableBody = RowInput[];
 
 /**
- * Draws two related tables starting page 3:
- * - Measurements: two-column, left then right, then new page
- * - FlatCrush/H2O: goes in the right column if available; else full-width below Measurements
+ * Draws measurement tables starting page 3:
+ * - Measurements: single full-width table, continues on next page if needed
  */
 export function DrawMeasurementTables(
   doc: jsPDF,
@@ -275,30 +345,32 @@ export function DrawMeasurementTables(
   company_name: string = "",
   orderNo: string = "",
   current_date: string = "",
-  startPage: number = 3 // Page number to start drawing tables
+  startPage: number = 3, // Page number to start drawing tables
+  logoBase64?: string, // optional: draw page-1 style header with logo
+  customer: string = ""
 ) {
   // ---------- Build table heads & bodies ----------
   const measurementsHead: TableHead = [
     ["Pal Nr", "L (mm)", "Ø in (mm)", "Ø out (mm)", "OK"],
   ];
-  const flatCrushH2oHead: TableHead = [["Flat Crush (kN/dm)", "H2O (%)"]];
   const measurementsBody: TableBody = [];
-  const flatCrushH2oBody: TableBody = [];
 
-  // Measurements body - sort by pallet count in ascending order, then by number_control
+  // Measurements body - sort by pallet count in ascending order, then by import_datetime
+  // Data from tbl_measurement_prod uses palette_num (not pallete_count)
   const sortedMeasurementData = [...measurementData].sort((a, b) => {
-    const palA = Number(a["pallete_count"]) || 0;
-    const palB = Number(b["pallete_count"]) || 0;
+    // Check for palette_num first (from tbl_measurement_prod), then fallback to other field names
+    const palA = Number(a["palette_num"] ?? a["pallete_count"] ?? a["palette_count"]) || 0;
+    const palB = Number(b["palette_num"] ?? b["pallete_count"] ?? b["palette_count"]) || 0;
     
-    // Primary sort: pallete_count
+    // Primary sort: palette_num/pallete_count
     if (palA !== palB) {
       return palA - palB;
     }
     
-    // Secondary sort: number_control (OFID) within same pallete
-    const controlA = Number(a["number_control"]) || 0;
-    const controlB = Number(b["number_control"]) || 0;
-    return controlA - controlB;
+    // Secondary sort: import_datetime (from tbl_measurement_prod) within same palette
+    const dateA = a["import_datetime"] ? new Date(a["import_datetime"]).getTime() : 0;
+    const dateB = b["import_datetime"] ? new Date(b["import_datetime"]).getTime() : 0;
+    return dateA - dateB;
   });
 
   console.log("DrawMeasurementTables - Processing measurement data:", {
@@ -308,31 +380,49 @@ export function DrawMeasurementTables(
   });
 
   for (const data of sortedMeasurementData) {
-    // Check for pallete_count in multiple possible field names
-    const pal = data["pallete_count"] ?? data["palette_count"] ?? data["palleteCount"] ?? data["paletteCount"];
+    // Check for palette_num first (from tbl_measurement_prod), then fallback to other field names
+    const pal = data["palette_num"] ?? data["pallete_count"] ?? data["palette_count"] ?? data["palleteCount"] ?? data["paletteCount"];
     
-    // Convert to number and check if it's a valid value (null, undefined, or NaN should be skipped)
-    const palNumber = pal != null ? Number(pal) : null;
-    
-    if (palNumber === null || isNaN(palNumber)) {
-      console.warn("Skipping measurement with invalid pallete_count:", {
-        pallete_count: data["pallete_count"],
-        palette_count: data["palette_count"],
-        palleteCount: data["palleteCount"],
-        paletteCount: data["paletteCount"],
-        fullData: data,
-        allKeys: Object.keys(data)
-      });
-      continue; // skip invalid pallets
+    // Convert to number, show "--" if missing or invalid (no incremental fallback)
+    let palNumber: number | string;
+    if (pal != null && !isNaN(Number(pal)) && Number(pal) !== 0) {
+      palNumber = Number(pal);
+    } else {
+      // Show "--" when pallete_count is missing, invalid, or 0
+      palNumber = "--";
     }
     
-    measurementsBody.push([
-      palNumber, // Use the numeric value
-      data["length"] || "--",
-      data["inside_diameter"] || "--",
-      data["outside_diameter"] || "--",
-      "", // OK column (blank)
-    ]);
+    // Helper function to format measurement values: show "--" if null, undefined, empty, or 0
+    const formatMeasurement = (value: any): string | number => {
+      if (value == null || value === "" || Number(value) === 0) {
+        return "--";
+      }
+      // Format the number to show 2 decimal places only if there are decimal values
+      const formatted = formatNumberWithDecimals(value);
+      return formatted === "" ? "--" : formatted;
+    };
+    
+    // Always add to measurements table if we have any measurement data
+    // Check if at least one measurement field exists (excluding 0 values)
+    const hasAnyMeasurement = 
+      (data["length"] != null && Number(data["length"]) !== 0) || 
+      (data["inside_diameter"] != null && Number(data["inside_diameter"]) !== 0) || 
+      (data["outside_diameter"] != null && Number(data["outside_diameter"]) !== 0);
+    
+    if (hasAnyMeasurement) {
+      // OK column (geometry_valid): show "1" when valid, otherwise blank
+      const okValue =
+        data["geometry_valid"] != null && Number(data["geometry_valid"]) !== 0
+          ? "1"
+          : "";
+      measurementsBody.push([
+        palNumber, // Use the numeric value or "--"
+        formatMeasurement(data["length"]),
+        formatMeasurement(data["inside_diameter"]),
+        formatMeasurement(data["outside_diameter"]),
+        okValue,
+      ]);
+    }
   }
 
   console.log("DrawMeasurementTables - Built measurements body:", {
@@ -340,71 +430,55 @@ export function DrawMeasurementTables(
     sampleRow: measurementsBody[0]
   });
 
-  // FlatCrush/H2O body (include row if either value exists) - also sorted
-  for (const data of sortedMeasurementData) {
-    const fc = data["flat_crush"];
-    const h2o = data["h20"];
-    if (fc || h2o) flatCrushH2oBody.push([fc || "--", h2o || "--"]);
-  }
-
   // ---------- Page & layout constants ----------
   ensurePage(doc, startPage);
   const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
 
-  // Content margins (top avoids your header; bottom avoids footer)
-  const contentTop = marginTopStartPage3;
-  const contentBottom = 100; // adjust to your footer area if needed
+  // Content margins: first page starts below header; continuation pages use minimal top so table fills the page
+  const contentTopFirstPage = marginTopStartPage3;
+  const contentTopContinuation = 40; // use header area on continuation pages (no header drawn there)
+  const contentBottom = 100;
 
   const sideLeft = 40;
   const sideRight = 40;
-  const gap = 10;
 
   const printableW = pageW - (sideLeft + sideRight);
-  const colW = (printableW - gap) / 2;
 
-  // --------- Calculate total rows that can fit on one page (both columns) ---------
-  const availableColumnHeight = pageH - contentTop - contentBottom;
-  const headH = estimateHeadHeight(doc, 10);
-  const rowH = estimateRowHeight(doc, 10);
-  const maxRowsPerColumn = Math.max(1, Math.floor((availableColumnHeight - headH) / rowH));
-  const totalRowsPerPage = maxRowsPerColumn * 2; // Both columns combined
-
-  // --------- Render MEASUREMENTS as a two-column flow on ONE PAGE ---------
+  // --------- Ensure target page and draw page-1 style headers/footer ---------
   let currentPage = startPage;
-  
-  // Ensure the target page exists and is active
   if (currentPage > doc.getNumberOfPages()) doc.addPage();
   doc.setPage(currentPage);
 
-  // Draw headers and footer once for the page
-  DrawRightHeader(doc, "AQ 30", startPage, 40);
-  DrawMainHeader(doc, company_name, 40, startPage);
-  DrawHorizontalLine(doc, 40, 130);
-  DrawFooter(doc, 40, orderNo, current_date);
+  const margin = 40;
+  if (logoBase64) {
+    try {
+      doc.addImage(logoBase64, "PNG", margin, margin, 200, 70);
+    } catch (_) {}
+  }
+  DrawHorizontalLine(doc, margin, 0);
+  DrawRightHeader(doc, "AQ 30", 1, margin);
+  DrawMainHeader(doc, company_name, margin, 1);
+  DrawHorizontalLine(doc, margin, 155);
+  DrawHorizontalLine(doc, margin, 710);
+  DrawPage1StyleFooter(doc, margin, current_date, customer);
 
-  // Split measurements into left and right columns
-  // If total rows exceed one page capacity, take only what fits
-  const rowsToRender = measurementsBody.slice(0, totalRowsPerPage);
-  const midPoint = Math.ceil(rowsToRender.length / 2);
-  const leftColumnRows = rowsToRender.slice(0, midPoint);
-  const rightColumnRows = rowsToRender.slice(midPoint);
-
-  // Render left column
-  if (leftColumnRows.length > 0) {
+  // --------- Render MEASUREMENTS as single full-width table (1 fold), flow to next page if needed ---------
+  // startY: first page only (below header). margin.top: used on continuation pages so table occupies header area
+  if (measurementsBody.length > 0) {
     autoTable(doc, {
       head: measurementsHead,
-      body: leftColumnRows,
-      startY: contentTop,
-      tableWidth: colW,
+      body: measurementsBody,
+      startY: contentTopFirstPage,
+      tableWidth: printableW,
       margin: {
-        top: contentTop,
+        top: contentTopContinuation,
         bottom: contentBottom,
         left: sideLeft,
         right: sideRight,
       },
       theme: "grid",
-      rowPageBreak: "avoid",
+      rowPageBreak: "auto",
+      showHead: "everyPage",
       styles: {
         font: "times",
         fontSize: 10,
@@ -421,109 +495,135 @@ export function DrawMeasurementTables(
       },
     });
   }
+}
 
-  // Render right column (on same page, starting at same Y position)
-  if (rightColumnRows.length > 0) {
-    autoTable(doc, {
-      head: measurementsHead, // Add headers to right column
-      body: rightColumnRows,
-      startY: contentTop,
-      tableWidth: colW,
-      margin: {
-        top: contentTop,
-        bottom: contentBottom,
-        left: sideLeft + colW + gap,
-        right: sideRight,
-      },
-      theme: "grid",
-      rowPageBreak: "avoid",
-      styles: {
-        font: "times",
-        fontSize: 10,
-        halign: "center",
-        valign: "middle",
-        cellWidth: "wrap",
-      },
-      headStyles: {
-        fontStyle: "bolditalic",
-        fontSize: 10,
-        halign: "center",
-        fillColor: false,
-        textColor: "black",
-      },
-    });
-  }
-
-  // Nothing else to draw
-  if (flatCrushH2oBody.length === 0) return;
-
-  // --------- Render FLAT CRUSH / H2O on a NEW PAGE ---------
-  // Always start Flat Crush/H2O on a new page after measurements
-  currentPage++;
-  if (currentPage > doc.getNumberOfPages()) doc.addPage();
-  doc.setPage(currentPage);
-
-  // Right header text
-  DrawRightHeader(doc, "AQ 30", startPage, 40);
-
-  // Main header text
-  DrawMainHeader(doc, company_name, 40, startPage);
-
-  // Horizontal line below headers
-  DrawHorizontalLine(doc, 40, 130);
-
-  // Draw Footer
-  DrawFooter(
-    doc,
-    40, // used to map x position
-    orderNo,
-    current_date
-  );
-
-  autoTable(doc, {
-    head: flatCrushH2oHead,
-    body: flatCrushH2oBody,
-    startY: contentTop,
-    tableWidth: printableW,
-    margin: {
-      top: contentTop,
-      bottom: contentBottom,
-      left: sideLeft,
-      right: sideRight,
-    },
-    theme: "grid",
-    styles: {
-      font: "times",
-      fontSize: 10,
-      halign: "center",
-      valign: "middle",
-      cellWidth: "wrap",
-    },
-    headStyles: {
-      fontStyle: "bolditalic",
-      fontSize: 10,
-      halign: "center",
-      fillColor: false,
-      textColor: "black",
-    },
+/**
+ * Draws a table for Flat Crush and H2O values
+ * Only shows rows with valid numeric values (filters out rows where both are invalid)
+ */
+export function DrawFlatCrushH2OTable(
+  doc: jsPDF,
+  measurementData: any[],
+  margin: number = 40,
+  startY: number = 0
+) {
+  // Sort measurement data by palette_num
+  const sortedData = [...measurementData].sort((a, b) => {
+    const palA = Number(a["palette_num"] ?? a["palete_count"] ?? a["palette_count"]) || 0;
+    const palB = Number(b["palette_num"] ?? b["palete_count"] ?? b["palette_count"]) || 0;
+    return palA - palB;
   });
 
-  // Override the H₂O header with proper subscript
-  const at = (doc as any).lastAutoTable;
-  if (at && at.table) {
-    const table = at.table;
-    const headerRow = table.head[0];
-    if (headerRow && headerRow[1]) {
-      // Get the position of the H₂O column (second column)
-      const h2oCell = headerRow[1];
-      if (h2oCell && h2oCell.x !== undefined && h2oCell.y !== undefined) {
-        // Clear the existing text and draw custom H₂O
-        doc.setFillColor(255, 255, 255);
-        doc.rect(h2oCell.x, h2oCell.y, h2oCell.width, h2oCell.height, 'F');
-        renderH2OTableHeader(doc, h2oCell.x, h2oCell.y, h2oCell.width);
-      }
+  // Helper function to check if value is a valid number
+  const isValidNumber = (value: any): boolean => {
+    if (value == null || value === undefined || value === "") {
+      return false;
     }
+    const numValue = parseFloat(value);
+    return !isNaN(numValue) && numValue !== 0;
+  };
+
+  // Helper function to format values (only for valid numbers)
+  const formatValue = (value: any): string => {
+    if (!isValidNumber(value)) {
+      return "--";
+    }
+    const numValue = parseFloat(value);
+    // Format with decimals only if needed (max 2 decimal places)
+    return formatNumberWithDecimals(numValue);
+  };
+
+  // Build table body - only include rows where at least one value is valid
+  // Flat crush displayed as kN/m: multiply by 10 (scale from per-10000 to per-1000)
+  const tableBody: RowInput[] = sortedData
+    .filter((data) => {
+      const flatCrush = data["flat_crush"];
+      const h2o = data["h2o"] ?? data["humidity"];
+      // Only include rows where at least one value is a valid number
+      return isValidNumber(flatCrush) || isValidNumber(h2o);
+    })
+    .map((data) => {
+      const rawFlatCrush = data["flat_crush"];
+      const flatCrush = isValidNumber(rawFlatCrush)
+        ? formatValue(parseFloat(rawFlatCrush) * 10)
+        : formatValue(rawFlatCrush);
+      const h2o = formatValue(data["h2o"] ?? data["humidity"]);
+      
+      return [flatCrush, h2o];
+    });
+
+  // Check page boundaries to avoid overlap with footer
+  const pageH = doc.internal.pageSize.getHeight();
+  const footerArea = 100; // Footer area height
+  const minSpaceNeeded = 50; // Minimum space needed for table (header + at least 1 row)
+  const maxTableY = pageH - margin - footerArea - minSpaceNeeded;
+
+  // Adjust startY if it would cause overlap
+  let adjustedStartY = startY;
+  if (startY > maxTableY) {
+    // If table would overlap, move to next page
+    doc.addPage();
+    adjustedStartY = margin + 180; // Start below header on new page
   }
+
+  // Only draw table if there's valid data
+  if (tableBody.length > 0) {
+    autoTable(doc, {
+      head: [["Flat Crush (kN/dm)", ""]], // Second column drawn with subscript via didDrawCell
+      body: tableBody,
+      startY: adjustedStartY,
+      margin: {
+        left: margin,
+        right: margin,
+        bottom: footerArea + 10 // Ensure space above footer
+      },
+      theme: "grid",
+      styles: {
+        font: "times",
+        fontSize: 10,
+        halign: "center",
+        valign: "middle",
+        cellPadding: 5,
+      },
+      headStyles: {
+        fontStyle: "bolditalic",
+        fontSize: 10,
+        halign: "center",
+        fillColor: false,
+        textColor: "black",
+      },
+      columnStyles: {
+        0: { cellWidth: "auto", halign: "center" },
+        1: { cellWidth: "auto", halign: "center" },
+      },
+      didDrawCell: (data: any) => {
+        // Draw "H₂O (%)" with subscript in the second header cell
+        if (data.section === "head" && data.column.index === 1) {
+          const cellX = data.cell.x;
+          const cellY = data.cell.y;
+          const cellWidth = data.cell.width;
+          const centerY = cellY + data.cell.height / 2 + 2;
+          drawH2OLabel(doc, cellX, centerY, {
+            fontSize: 10,
+            style: "bolditalic",
+            centered: true,
+            cellWidth,
+          });
+        }
+      },
+      // Prevent table from extending into footer area
+      didDrawPage: (data: any) => {
+        const currentY = data.cursor.y;
+        const maxY = pageH - margin - footerArea;
+        if (currentY > maxY) {
+          return false; // Stop drawing if we'd hit the footer
+        }
+      },
+    });
+  }
+
+  // Return the final Y position after the table
+  return (doc as any).lastAutoTable?.finalY || adjustedStartY;
 }
 
 /* ---------- Helpers ---------- */

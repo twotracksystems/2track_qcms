@@ -1,44 +1,35 @@
-import { createClient, roleExtractor } from "@/utils/supabase/server";
+import { createClient } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function PUT(req: NextRequest) {
   try {
-    // Extract UUID from the request query
     const id = req.nextUrl.searchParams.get("id");
-   
+    if (!id) {
+      return NextResponse.json(
+        { error: "ID parameter is required" },
+        { status: 400 }
+      );
+    }
 
-    // Parse request body
-    const { is_exist } =
-      await req.json();
-
-    // Initialize Supabase client
     const supabase = await createClient();
 
-    // Verify user role
-    // const current_role = await roleExtractor(supabase);
-    // if (current_role !== "Super Admin") {
-    //   return NextResponse.json(
-    //     { error: "No permission to perform this action" },
-    //     { status: 401 }
-    //   );
-    // }
+    // Delete the row from tbl_measurement_prod (hard delete so it no longer appears in the list)
+    const { data: deleteData, error: deleteError } = await supabase
+      .from("tbl_measurement_prod")
+      .delete()
+      .eq("id", id)
+      .select();
 
-    // Update user details in the database
-    const { data: userUpdateData, error: userUpdateError } = await supabase
-      .from("tbl_measurement")
-      .update({ is_exist, updated_at: new Date() }).eq("id", id);
-
-    if (userUpdateError) {
-      console.error("Supabase Update Error:", userUpdateError);
+    if (deleteError) {
+      console.error("Supabase Delete Error:", deleteError);
       return NextResponse.json(
-        { error: `Database update failed: ${userUpdateError.message}` },
+        { error: `Database delete failed: ${deleteError.message}` },
         { status: 500 }
       );
     }
 
-    // Return success response
     return NextResponse.json(
-      { message: "User updated successfully", data: userUpdateData },
+      { message: "Measurement removed successfully", data: deleteData },
       { status: 200 }
     );
   } catch (err: any) {

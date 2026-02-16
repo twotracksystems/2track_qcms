@@ -12,6 +12,7 @@ import { useState, useEffect, use } from "react";
 import Order from "@/app/dashboard/laboratory_management/page";
 import AddOrder from "@/app/dashboard/addorder/page";
 import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
+import { normalizeDecimalInput } from "@/utils/parseDecimal";
 export default function AddArticleMinList() {
   const navigator = useRouter();
   useEscapeNavigation("/dashboard/article_min_management");
@@ -31,7 +32,7 @@ export default function AddArticleMinList() {
     inside_diameter: Yup.string().required("Inside Diameter is required"),
     outside_diameter: Yup.string().required("Outside Diameter is required"),
     flat_crush: Yup.string().required("Flat Crush is required"),
-    h20: Yup.string().required("H20 is required"),
+    h20: Yup.string().required("H₂O is required"),
   });
 
   const [initialValues, setInitialValues] = useState({
@@ -87,11 +88,11 @@ export default function AddArticleMinList() {
         enableReinitialize={true}
         onSubmit={async (e, actions) => {
           AddOrderMutation.mutate({
-            length: e.length,
-            inside_diameter: e.inside_diameter,
-            outside_diameter: e.outside_diameter,
-            flat_crush: e.flat_crush,
-            h20: e.h20,
+            length: normalizeDecimalInput(e.length),
+            inside_diameter: normalizeDecimalInput(e.inside_diameter),
+            outside_diameter: normalizeDecimalInput(e.outside_diameter),
+            flat_crush: normalizeDecimalInput(e.flat_crush),
+            h20: normalizeDecimalInput(e.h20),
             user_id: userid,
           });
         }}
@@ -248,10 +249,10 @@ export default function AddArticleMinList() {
                     <label className="form-control w-96 max-w-lg">
                       <div className="label">
                         <span className="label-text font-bold gap-x-2 flex flex-row">
-                          H20 (%)
+                          H₂O (%)
                           <span
                             className="tooltip tooltip-right"
-                            data-tip="H20 Field. This is required."
+                            data-tip="H₂O (humidity). This is required."
                           >
                             <CircleHelp
                               className=" my-auto"
@@ -263,7 +264,7 @@ export default function AddArticleMinList() {
                       </div>
                       <Field
                         type="text"
-                        placeholder="H20"
+                        placeholder="H₂O"
                         name="h20"
                         className={`input input-bordered w-full max-w-md ${
                           errors.h20 && touched.h20 ? "input-error" : ""

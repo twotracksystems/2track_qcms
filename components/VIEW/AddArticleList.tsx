@@ -10,6 +10,7 @@ import * as Yup from "yup";
 import { FormSelect } from "../UI/FormInput";
 import { useState, useEffect, use } from "react";
 import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
+import { normalizeDecimalInput } from "@/utils/parseDecimal";
 export default function AddArticleList() {
   const navigator = useRouter();
   useEscapeNavigation("/dashboard/article_management");
@@ -155,7 +156,7 @@ export default function AddArticleList() {
               article_nominal: e.ArticleNominal,
               article_min: e.ArticleMin,
               article_max: e.ArticleMax,
-              number_control: e.NumberControl,
+              number_control: normalizeDecimalInput(e.NumberControl),
               user_id: userid,
             });
           }}
@@ -226,7 +227,9 @@ export default function AddArticleList() {
                           </span>
                         </div>
                         <Field
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
+                          pattern="[0-9.,-]*"
                           placeholder="Enter Number Of Control"
                           name="NumberControl"
                           className={`input input-bordered w-full ${

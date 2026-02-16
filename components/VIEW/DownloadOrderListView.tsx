@@ -6,6 +6,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { create } from "domain";
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { Calendar } from "lucide-react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 
@@ -16,15 +17,18 @@ Chart.register(ChartDataLabels);
 
 // necessary functions in building the PDF files
 import {
-  DrawFooter,
+  drawH2OLabel,
   DrawGraphLabel,
   DrawHorizontalLine,
   DrawLeftHeader,
   DrawMainHeader,
   DrawRightHeader,
   DrawMeasurementTables,
+  DrawFlatCrushH2OTable,
+  DrawPage1StyleFooter,
   WriteH2OItalic,
 } from "./PDFBuilder";
+import { formatNumberWithDecimals } from "@/utils/formatNumber";
 
 // necessary packages for exporting zip files
 import JSZip from "jszip";
@@ -44,7 +48,7 @@ type Measurement = {
   inside_diameter?: number;
   outside_diameter?: number;
   flat_crush?: number;
-  h20?: number;
+  h2o?: number;
   [key: string]: any;
 };
 
@@ -74,6 +78,13 @@ export default function DownloadOrderListView({
   // State for selected articles: { ofid: { articleId: articleData } }
   const [selectedArticlesByOfid, setSelectedArticlesByOfid] = useState<Record<string, Record<number, any>>>({});
 
+  // Order details modal (Order Number + Delivery Date) before PDF download
+  const [isOrderDetailsModalOpen, setIsOrderDetailsModalOpen] = useState(false);
+  const [orderDetailsForm, setOrderDetailsForm] = useState<Record<string, { orderNumber: string; deliveryDate: string }>>({});
+  const [orderDetailsOverrides, setOrderDetailsOverrides] = useState<Record<string, { orderNumber: string; deliveryDate: string }>>({});
+  const [isOrderDetailsEditing, setIsOrderDetailsEditing] = useState(false);
+  const deliveryDatePickerRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
   // Ensure we're on the client side for portal rendering
   useEffect(() => {
     setMounted(true);
@@ -81,20 +92,17 @@ export default function DownloadOrderListView({
 
   const canvasRef = useRef<HTMLCanvasElement>(null); // used to refer to the canvas element containing the chart
 
-  // function to get customer specifications data
+  // function to get customer specifications data from tbl_article_prod
   const GetCustomerSpecificationsData = async (
-    nominalArticleId: number | null | undefined,
-    minArticleId: number | null | undefined,
-    maxArticleId: number | null | undefined
+    articleProdId: number | string | null | undefined
   ) => {
     const customerSpecificationsDataAggregated = [];
 
-    // Only fetch if we have a valid ID (not null, undefined, or "***")
-    if (nominalArticleId && nominalArticleId !== "***" && !isNaN(Number(nominalArticleId))) {
+    // Fetch from tbl_article_prod if we have a valid ID
+    if (articleProdId && articleProdId !== "***" && !isNaN(Number(articleProdId))) {
       try {
-        const responseNominal = await fetch(
-          // index [0] = nominal, index [1] = Max, index [2] = Min
-          `/api/v1/getonearticlenominal?id=${encodeURIComponent(nominalArticleId)}`,
+        const response = await fetch(
+          `/api/v1/getonearticleprod?id=${encodeURIComponent(articleProdId)}`,
           {
             method: "GET",
             headers: {
@@ -104,95 +112,223 @@ export default function DownloadOrderListView({
           }
         );
 
-        if (responseNominal.ok) {
-          const nominalResult = await responseNominal.json();
-          customerSpecificationsDataAggregated.push(nominalResult[0] || {});
-        } else {
-          customerSpecificationsDataAggregated.push({});
-        }
-      } catch (error) {
-        console.error("Error fetching nominal article:", error);
-        customerSpecificationsDataAggregated.push({});
-      }
-    } else {
-      customerSpecificationsDataAggregated.push({});
-    }
+        if (response.ok) {
+          const articleProdResult = await response.json();
+          const articleData = articleProdResult[0] || {};
+          
+          if (articleData) {
+            // Helper function to parse text numbers that may have commas (e.g., "1,500.00")
+            const parseNumber = (value: any): number | null => {
+              if (!value || value === "") return null;
+              // Convert to string, remove commas, then parse
+              const cleaned = String(value).replace(/,/g, "");
+              const parsed = parseFloat(cleaned);
+              return isNaN(parsed) ? null : parsed;
+            };
 
-    if (minArticleId && minArticleId !== "***" && !isNaN(Number(minArticleId))) {
-      try {
-        const responseMin = await fetch(
-          `/api/v1/getonearticlemin?id=${encodeURIComponent(minArticleId)}`,
-          {
-            method: "GET",
-            headers: {
-              Accept: "*/*",
-              "User-Agent": "Thunder Client (https://www.thunderclient.com)",
-            },
+            // Same as article creation: display flat crush in kN (divide by 1000 if stored in large form)
+            const normalizeFlatCrushForDisplay = (value: number | null): number | null => {
+              if (value == null) return null;
+              return value > 1000 ? value / 1000 : value;
+            };
+            // Treat 0 and 0.000 as no value so single-value rule applies (use that value for nominal, min, and max)
+            const treatZeroAsNoValue = (value: number | null): number | null => {
+              if (value == null) return null;
+              if (typeof value === "number" && (value === 0 || Math.abs(value) < 1e-9)) return null;
+              return value;
+            };
+
+            // Use the direct length/inside_diameter/outside_diameter values from tbl_article_prod for nominal
+            // Handle comma-separated numbers properly
+            const nominalLength = parseNumber(articleData.length);
+            
+            const nominalInsideDiameter = parseNumber(articleData.inside_diameter);
+            
+            const nominalOutsideDiameter = parseNumber(articleData.outside_diameter);
+            
+            // Resistance: if only one value (min or max), use it for min, max, and nominal; if both min and max, leave nominal blank. Treat 0 as no value.
+            const resistanceMin = treatZeroAsNoValue(normalizeFlatCrushForDisplay(parseNumber(articleData.resistance_min)));
+            const resistanceMax = treatZeroAsNoValue(normalizeFlatCrushForDisplay(parseNumber(articleData.resistance_max)));
+            const hasMin = resistanceMin != null;
+            const hasMax = resistanceMax != null;
+            const nominalResistance =
+              hasMin && hasMax
+                ? null
+                : hasMin
+                  ? resistanceMin
+                  : hasMax
+                    ? resistanceMax
+                    : null;
+            const resistanceMinForTable = hasMin ? resistanceMin : (hasMax ? resistanceMax : null);
+            const resistanceMaxForTable = hasMax ? resistanceMax : (hasMin ? resistanceMin : null);
+            
+            // Humidity (H2O): same logic as resistance - single value → use for nominal/min/max; both → nominal blank; treat 0 as no value
+            const humidityMinRaw = parseNumber(articleData.humidty_min);
+            const humidityMaxRaw = parseNumber(articleData.humidity_max);
+            const humidityMin = treatZeroAsNoValue(humidityMinRaw);
+            const humidityMax = treatZeroAsNoValue(humidityMaxRaw);
+            const hasHumidityMin = humidityMin != null;
+            const hasHumidityMax = humidityMax != null;
+            const nominalHumidity =
+              hasHumidityMin && hasHumidityMax
+                ? null
+                : hasHumidityMin
+                  ? humidityMin
+                  : hasHumidityMax
+                    ? humidityMax
+                    : null;
+            const humidityMinForTable = hasHumidityMin ? humidityMin : (hasHumidityMax ? humidityMax : null);
+            const humidityMaxForTable = hasHumidityMax ? humidityMax : (hasHumidityMin ? humidityMin : null);
+
+            // Build nominal data (index [0]) - all values are averages
+            const nominalData = {
+              length: nominalLength,
+              inside_diameter: nominalInsideDiameter,
+              outside_diameter: nominalOutsideDiameter,
+              resistance: nominalResistance,
+              humidity: nominalHumidity,
+            };
+
+            // Build max data (index [1]) - also parse numbers to handle commas
+            const maxData = {
+              length: parseNumber(articleData.length_max),
+              inside_diameter: parseNumber(articleData.inside_diameter_max),
+              outside_diameter: parseNumber(articleData.outside_diameter_max),
+              resistance: resistanceMaxForTable,
+              humidity: humidityMaxForTable,
+            };
+
+            // Build min data (index [2]) - also parse numbers to handle commas
+            const minData = {
+              length: parseNumber(articleData.length_min),
+              inside_diameter: parseNumber(articleData.inside_diameter_min),
+              outside_diameter: parseNumber(articleData.outside_diameter_min),
+              resistance: resistanceMinForTable,
+              humidity: humidityMinForTable,
+            };
+
+            customerSpecificationsDataAggregated.push(nominalData, maxData, minData);
+          } else {
+            customerSpecificationsDataAggregated.push({}, {}, {});
           }
-        );
-
-        if (responseMin.ok) {
-          const minResult = await responseMin.json();
-          customerSpecificationsDataAggregated.push(minResult[0] || {});
         } else {
-          customerSpecificationsDataAggregated.push({});
+          customerSpecificationsDataAggregated.push({}, {}, {});
         }
       } catch (error) {
-        console.error("Error fetching min article:", error);
-        customerSpecificationsDataAggregated.push({});
+        console.error("Error fetching article_prod:", error);
+        customerSpecificationsDataAggregated.push({}, {}, {});
       }
     } else {
-      customerSpecificationsDataAggregated.push({});
-    }
-
-    if (maxArticleId && maxArticleId !== "***" && !isNaN(Number(maxArticleId))) {
-      try {
-        const responseMax = await fetch(
-          `/api/v1/getonearticlemax?id=${encodeURIComponent(maxArticleId)}`,
-          {
-            method: "GET",
-            headers: {
-              Accept: "*/*",
-              "User-Agent": "Thunder Client (https://www.thunderclient.com)",
-            },
-          }
-        );
-
-        if (responseMax.ok) {
-          const maxResult = await responseMax.json();
-          customerSpecificationsDataAggregated.push(maxResult[0] || {});
-        } else {
-          customerSpecificationsDataAggregated.push({});
-        }
-      } catch (error) {
-        console.error("Error fetching max article:", error);
-        customerSpecificationsDataAggregated.push({});
-      }
-    } else {
-      customerSpecificationsDataAggregated.push({});
+      customerSpecificationsDataAggregated.push({}, {}, {});
     }
 
     return customerSpecificationsDataAggregated;
   };
 
-  const GetMeasurementData = async (orderId: number) => {
-    const responseMeasurementData = await fetch(
-      `/api/v1/getonemeasurement?id=${encodeURIComponent(orderId)}`,
-      {
+  const GetMeasurementData = async (ofid: string) => {
+    // Validate ofid
+    if (!ofid || ofid === "***" || ofid.trim() === "") {
+      console.error("GetMeasurementData: Invalid ofid provided:", ofid);
+      toast.error("Invalid order fabrication control number");
+      return [] as Measurement[];
+    }
+
+    const trimmedOfid = ofid.trim();
+    
+    console.log("=".repeat(80));
+    console.log("GetMeasurementData: Fetching measurements for ofid:", {
+      originalOfid: ofid,
+      trimmedOfid: trimmedOfid,
+      ofidType: typeof ofid,
+      ofidLength: ofid.length,
+      trimmedLength: trimmedOfid.length,
+      hasWhitespace: ofid !== trimmedOfid,
+    });
+    
+    try {
+      const url = `/api/v1/getonemeasurementprod?ofid=${encodeURIComponent(trimmedOfid)}`;
+      console.log("GetMeasurementData: Request URL:", url);
+      
+      const responseMeasurementData = await fetch(url, {
         method: "GET",
         headers: {
           Accept: "*/*",
           "User-Agent": "Thunder Client (https://www.thunderclient.com)",
         },
+      });
+
+      console.log("GetMeasurementData: Response status:", {
+        status: responseMeasurementData.status,
+        ok: responseMeasurementData.ok,
+        statusText: responseMeasurementData.statusText,
+        headers: Object.fromEntries(responseMeasurementData.headers.entries()),
+      });
+
+      if (!responseMeasurementData.ok) {
+        const errorText = await responseMeasurementData.text();
+        console.error("GetMeasurementData: API error response:", {
+          status: responseMeasurementData.status,
+          statusText: responseMeasurementData.statusText,
+          errorText: errorText,
+        });
+        
+        let errorMessage = "Failed to fetch measurement data";
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.error || errorMessage;
+          console.error("GetMeasurementData: Parsed error JSON:", errorJson);
+        } catch (e) {
+          console.error("GetMeasurementData: Error text is not JSON:", errorText);
+        }
+        
+        toast.error(errorMessage);
+        return [] as Measurement[];
       }
-    );
 
-    const measurementData = await responseMeasurementData.json();
+      const measurementData = await responseMeasurementData.json();
+      
+      console.log("GetMeasurementData: Received data:", {
+        ofid: trimmedOfid,
+        count: Array.isArray(measurementData) ? measurementData.length : 0,
+        isArray: Array.isArray(measurementData),
+        firstItem: Array.isArray(measurementData) && measurementData.length > 0 ? {
+          id: measurementData[0].id,
+          ofid: measurementData[0].ofid,
+          palette_num: measurementData[0].palette_num,
+          length: measurementData[0].length,
+          inside_diameter: measurementData[0].inside_diameter,
+          outside_diameter: measurementData[0].outside_diameter,
+        } : null,
+        fullData: measurementData,
+      });
 
-    if (responseMeasurementData.ok) {
-      return measurementData;
-    } else {
-      toast.error("Failed to fetch measurement data");
+      // Validate that we got an array
+      if (!Array.isArray(measurementData)) {
+        console.error("GetMeasurementData: Response is not an array:", measurementData);
+        toast.error("Invalid measurement data format received");
+        return [] as Measurement[];
+      }
+
+      // Check if data is empty
+      if (measurementData.length === 0) {
+        console.warn("GetMeasurementData: No measurements found for ofid:", trimmedOfid);
+        toast.error(`No measurements found for order ${trimmedOfid}`);
+        return [] as Measurement[];
+      }
+
+      console.log("GetMeasurementData: Successfully retrieved", measurementData.length, "measurements");
+      console.log("=".repeat(80));
+      
+      return measurementData as Measurement[];
+    } catch (error) {
+      console.error("=".repeat(80));
+      console.error("GetMeasurementData: Exception occurred:", error);
+      if (error instanceof Error) {
+        console.error("Error message:", error.message);
+        console.error("Error stack:", error.stack);
+      }
+      console.error("=".repeat(80));
+      toast.error("Error fetching measurement data");
       return [] as Measurement[];
     }
   };
@@ -211,12 +347,26 @@ export default function DownloadOrderListView({
       );
 
       if (!response.ok) {
+        console.error("API Error:", response.status, response.statusText);
+        const errorText = await response.text();
+        console.error("Error response:", errorText);
         return [];
       }
 
       const data = await response.json();
+      
+      // Debug: Log the full response
+      console.log("=== OFID Matching Response ===", {
+        ofid: ofid,
+        matchCount: data.match_count || 0,
+        matchingArticles: data.matching_articles || [],
+        productionRecord: data.production_record,
+        debug: data.debug,
+      });
+      
       return data.matching_articles || [];
     } catch (error) {
+      console.error("Error fetching matching articles:", error);
       return [];
     }
   };
@@ -228,23 +378,14 @@ export default function DownloadOrderListView({
     max_data: any,
     orderNo?: string
   ) => {
-    // Helper function to format values (handle null, undefined, and numbers)
-    const formatValue = (value: any): string => {
+    // Helper function to format values (handle null, undefined, and numbers; H2O/humidity → blank when empty)
+    const formatValue = (value: any, key?: string): string => {
       if (value === null || value === undefined || value === "") {
-        return "No data";
+        return key === "humidity" ? "" : "No data";
       }
       // If it's a number, format it appropriately
       if (typeof value === "number") {
-        // For very small numbers, show more decimals
-        if (Math.abs(value) < 1 && value !== 0) {
-          return value.toFixed(4);
-        }
-        // For whole numbers, show as integer
-        if (Number.isInteger(value)) {
-          return value.toString();
-        }
-        // For decimals, show 2 decimal places
-        return value.toFixed(2);
+        return formatNumberWithDecimals(value);
       }
       return String(value);
     };
@@ -253,8 +394,8 @@ export default function DownloadOrderListView({
       { label: "Length (mm)", key: "length" },
       { label: "Inside Diameter (mm)", key: "inside_diameter" },
       { label: "Outside Diameter (mm)", key: "outside_diameter" },
-      { label: "Flat Crush (kN/m)", key: "flat_crush" },
-      { label: "H2O (%)", key: "h20" },
+      { label: "Flat Crush (kN/m)", key: "resistance" },
+      { label: "H₂O (%)", key: "humidity" },
     ];
 
     console.log("\n" + "=".repeat(80));
@@ -269,9 +410,9 @@ export default function DownloadOrderListView({
     console.log("-".repeat(80));
 
     specs.forEach((spec) => {
-      const nominal = formatValue(nominal_data?.[spec.key]);
-      const max = formatValue(max_data?.[spec.key]);
-      const min = formatValue(min_data?.[spec.key]);
+      const nominal = formatValue(nominal_data?.[spec.key], spec.key);
+      const max = formatValue(max_data?.[spec.key], spec.key);
+      const min = formatValue(min_data?.[spec.key], spec.key);
 
       console.log(
         spec.label.padEnd(25) +
@@ -286,33 +427,40 @@ export default function DownloadOrderListView({
 
     // Also log the raw data structure with foreign key references
     console.log("Raw Data Structure (Foreign Key References):");
-    console.log("Article Nominal (tbl_article_nominal):", {
+    console.log("Article Nominal (tbl_article_prod):", {
       ...nominal_data,
-      flat_crush: nominal_data?.flat_crush ?? null,
-      h20: nominal_data?.h20 ?? null,
+      resistance: nominal_data?.resistance ?? null,
+      humidity: nominal_data?.humidity ?? null,
     });
-    console.log("Article Max (tbl_article_max):", {
+    console.log("Article Max (tbl_article_prod):", {
       ...max_data,
-      flat_crush: max_data?.flat_crush ?? null,
-      h20: max_data?.h20 ?? null,
+      resistance: max_data?.resistance ?? null,
+      humidity: max_data?.humidity ?? null,
     });
-    console.log("Article Min (tbl_article_min):", {
+    console.log("Article Min (tbl_article_prod):", {
       ...min_data,
-      flat_crush: min_data?.flat_crush ?? null,
-      h20: min_data?.h20 ?? null,
+      resistance: min_data?.resistance ?? null,
+      humidity: min_data?.humidity ?? null,
     });
     
-    // Additional info about flat_crush and h20
+    // Additional info about resistance and humidity
     console.log("\nFlat Crush & H2O Details:");
-    console.log("  Nominal - Flat Crush:", nominal_data?.flat_crush ?? "null/undefined", "| H2O:", nominal_data?.h20 ?? "null/undefined");
-    console.log("  Max     - Flat Crush:", max_data?.flat_crush ?? "null/undefined", "| H2O:", max_data?.h20 ?? "null/undefined");
-    console.log("  Min     - Flat Crush:", min_data?.flat_crush ?? "null/undefined", "| H2O:", min_data?.h20 ?? "null/undefined");
+    console.log("  Nominal - Flat Crush:", nominal_data?.resistance ?? "null/undefined", "| H2O:", nominal_data?.humidity ?? "null/undefined");
+    console.log("  Max     - Flat Crush:", max_data?.resistance ?? "null/undefined", "| H2O:", max_data?.humidity ?? "null/undefined");
+    console.log("  Min     - Flat Crush:", min_data?.resistance ?? "null/undefined", "| H2O:", min_data?.humidity ?? "null/undefined");
   };
 
   function calculateStats(data: Measurement[], field: keyof Measurement) {
     // returns the descriptive statistics of the order measurements
     const values = data
-      .map((d) => d[field])
+      .map((d) => {
+        const value = d[field];
+        // Convert to number if it's a string
+        if (typeof value === "string" && value !== "" && !isNaN(Number(value))) {
+          return Number(value);
+        }
+        return value;
+      })
       .filter((v): v is number => typeof v === "number" && !isNaN(v) && v !== 0);
 
 
@@ -352,10 +500,51 @@ export default function DownloadOrderListView({
 
     const ctx = canvas.getContext("2d")!;
     
-    // Filter out zero values and sort by palette count in ascending order
-    const filteredData = data
-      .filter((d) => d.data !== 0 && d.data !== null && d.data !== undefined && !isNaN(d.data))
-      .sort((a, b) => a.palette_count - b.palette_count);
+    console.log("DEBUG generateLineChartImage: Received data:", data);
+    console.log("DEBUG generateLineChartImage: Data length:", data.length);
+    
+    // Data should already be filtered and converted, but do a final safety check
+    // Only filter if data is still null/undefined/NaN (shouldn't happen if pre-filtered correctly)
+    const processedData = data
+      .map((d) => {
+        // Final conversion check
+        let numValue: number | null = null;
+        if (d.data != null && d.data !== undefined) {
+          if (typeof d.data === 'string' && d.data !== '') {
+            numValue = parseFloat(d.data);
+          } else if (typeof d.data === 'number') {
+            numValue = d.data;
+          } else {
+            numValue = Number(d.data);
+          }
+        }
+        
+        return {
+          ...d,
+          data: numValue
+        };
+      })
+      .filter((d): d is chartData & { data: number } => {
+        const isValid = d.data !== null && 
+                        d.data !== undefined && 
+                        !isNaN(d.data) && 
+                        d.data !== 0 &&
+                        typeof d.data === 'number';
+        
+        if (!isValid) {
+          console.log("DEBUG generateLineChartImage: Filtering out:", d);
+        }
+        
+        return isValid;
+      });
+    
+    console.log("DEBUG generateLineChartImage: Processed data:", processedData);
+    console.log("DEBUG generateLineChartImage: Processed length:", processedData.length);
+    
+    // Sort by palette count in ascending order
+    const filteredData = processedData.sort((a, b) => a.palette_count - b.palette_count);
+    
+    console.log("DEBUG generateLineChartImage: Final filtered data:", filteredData);
     
     // Recalculate mean based on filtered data
     const filteredValues = filteredData.map((d) => d.data);
@@ -366,7 +555,7 @@ export default function DownloadOrderListView({
     const labels = filteredData.map((d) => String(d.palette_count));
     const values = filteredData.map((d) => d.data);
 
-    // Handle single data point case
+    // Handle single data point case OR all values are the same
     let minVal, maxVal, padding;
     if (values.length === 1) {
       // For single point, create a range around the value
@@ -382,7 +571,17 @@ export default function DownloadOrderListView({
     } else {
       minVal = Math.min(...values);
       maxVal = Math.max(...values);
-      padding = (maxVal - minVal) * 0.1; // 10% headroom
+      
+      // Handle case where all values are the same (minVal === maxVal)
+      if (minVal === maxVal) {
+        // Create a range around the constant value, similar to single point
+        const constantValue = minVal;
+        minVal = constantValue * 0.8; // 20% below
+        maxVal = constantValue * 1.2;   // 20% above
+        padding = (maxVal - minVal) * 0.1;
+      } else {
+        padding = (maxVal - minVal) * 0.1; // 10% headroom
+      }
     }
     const chart = new Chart(ctx, {
       type: "line",
@@ -464,12 +663,10 @@ export default function DownloadOrderListView({
           afterDraw: (chart) => {
             const yScale = chart.scales.y;
             const ctx = chart.ctx;
-            
-            // Ensure we have a valid mean value
+
+            // Mean line (always draw when valid)
             const meanToUse = isNaN(recalculatedMean) || recalculatedMean === 0 ? meanValue : recalculatedMean;
             const y = yScale.getPixelForValue(meanToUse);
-
-            // Only draw the line if it's within the chart area
             if (y >= chart.chartArea.top && y <= chart.chartArea.bottom) {
               ctx.save();
               ctx.beginPath();
@@ -477,8 +674,40 @@ export default function DownloadOrderListView({
               ctx.lineTo(chart.chartArea.right, y);
               ctx.strokeStyle = "red";
               ctx.lineWidth = 1.5;
-              ctx.setLineDash([5, 5]); // dashed line
+              ctx.setLineDash([5, 5]);
               ctx.stroke();
+              ctx.restore();
+            }
+
+            // Min/max dotted lines only when there are more than 2 points, with allowance (margin) beyond data range
+            if (values.length > 2) {
+              const dataMin = Math.min(...values);
+              const dataMax = Math.max(...values);
+              const range = dataMax - dataMin;
+              // Allowance: 10% of range on each side; if range is 0 use 1% of value or small constant
+              const allowance =
+                range > 0 ? range * 0.1 : Math.max(Math.abs(dataMin) * 0.01, 0.01);
+              const lowerLine = dataMin - allowance;
+              const upperLine = dataMax + allowance;
+
+              const yMin = yScale.getPixelForValue(lowerLine);
+              const yMax = yScale.getPixelForValue(upperLine);
+              ctx.save();
+              ctx.strokeStyle = "red";
+              ctx.lineWidth = 1.5;
+              ctx.setLineDash([5, 5]);
+              if (yMin >= chart.chartArea.top && yMin <= chart.chartArea.bottom) {
+                ctx.beginPath();
+                ctx.moveTo(chart.chartArea.left, yMin);
+                ctx.lineTo(chart.chartArea.right, yMin);
+                ctx.stroke();
+              }
+              if (yMax >= chart.chartArea.top && yMax <= chart.chartArea.bottom && yMax !== yMin) {
+                ctx.beginPath();
+                ctx.moveTo(chart.chartArea.left, yMax);
+                ctx.lineTo(chart.chartArea.right, yMax);
+                ctx.stroke();
+              }
               ctx.restore();
             }
           },
@@ -491,8 +720,63 @@ export default function DownloadOrderListView({
     return imageUrl;
   }
 
+  // Format YYYY-MM-DD to DD/MM/YYYY for display
+  const formatToDDMMYYYY = (yyyyMmDd: string): string => {
+    if (!yyyyMmDd || !/^\d{4}-\d{2}-\d{2}$/.test(yyyyMmDd)) return yyyyMmDd || "—";
+    const [y, m, d] = yyyyMmDd.split("-");
+    return `${d}/${m}/${y}`;
+  };
+
+  // Parse user input in DD/MM/YYYY format to YYYY-MM-DD for storage
+  const parseDDMMYYYYToStorage = (input: string): string => {
+    const trimmed = (input || "").trim();
+    if (!trimmed) return "";
+    const parts = trimmed.split("/").map((p) => p.trim());
+    if (parts.length !== 3) return "";
+    const [d, m, y] = parts.map((p) => parseInt(p, 10));
+    if (isNaN(d) || isNaN(m) || isNaN(y)) return "";
+    const year = y < 100 ? 2000 + y : y;
+    if (m < 1 || m > 12 || d < 1 || d > 31) return "";
+    return `${year}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  };
+
+  // Parse delivery_date from tbl_prod to YYYY-MM-DD (no fallbacks)
+  const parseDeliveryDateToYYYYMMDD = (value: any): string => {
+    if (value == null || value === "") return "";
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) return "";
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+      const d = new Date(trimmed);
+      if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+      const parts = trimmed.split("/").map((p) => p.trim());
+      if (parts.length === 3) {
+        const [a, b, c] = parts.map((p) => parseInt(p, 10));
+        if (c != null && b != null && a != null && !isNaN(a) && !isNaN(b) && !isNaN(c)) {
+          const year = c < 100 ? 2000 + c : c;
+          const month = a <= 12 ? a : b;
+          const day = a <= 12 ? b : a;
+          if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+            return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          }
+        }
+      }
+    }
+    return "";
+  };
+
+  // Build initial order details from order (tbl_prod order_number and delivery_date only, no fallbacks)
+  const getInitialOrderDetails = (order: any) => {
+    const orderNumber = order?.order_number != null && order.order_number !== "" ? String(order.order_number) : "";
+    const deliveryDate = parseDeliveryDateToYYYYMMDD(order?.delivery_date);
+    return { orderNumber, deliveryDate };
+  };
+
   // Function to proceed with PDF generation (extracted from original handleClick)
-  const proceedWithPDFGeneration = async () => {
+  const proceedWithPDFGeneration = async (
+    overrideSelectedArticles?: Record<string, Record<number, any>>,
+    overrides?: Record<string, { orderNumber: string; deliveryDate: string }>
+  ) => {
     setIsLoading(true);
     setButtonLabel("Downloading...");
     setIsDisabled(true);
@@ -503,9 +787,12 @@ export default function DownloadOrderListView({
       // If multiple articles are selected for an order, generate multiple PDFs
       const ordersToProcess: Array<{ order: any; article: any | null }> = [];
       
+      // Use override if provided (for auto-selection), otherwise use state
+      const articlesToUse = overrideSelectedArticles || selectedArticlesByOfid;
+      
       selectedOrders.forEach((order: any) => {
         const ofid = String(order.order_fabrication_control);
-        const selectedArticles = selectedArticlesByOfid[ofid];
+        const selectedArticles = articlesToUse[ofid];
         
         if (selectedArticles && Object.keys(selectedArticles).length > 0) {
           // Generate a PDF for each selected article
@@ -545,37 +832,50 @@ export default function DownloadOrderListView({
             ).toUpperCase();
           }
 
-          // get order fabrication control number
-          const orderNo = get(order.order_fabrication_control);
+          const ofid = String(order.order_fabrication_control);
+          const detailsOverride = (overrides ?? orderDetailsOverrides)[ofid];
+          // Order number for PDF: override from modal, else tbl_prod.order_number only (no fallback)
+          const orderNo = detailsOverride?.orderNumber?.trim() ?? (order?.order_number != null && order.order_number !== "" ? String(order.order_number) : "");
 
-          // fetch measurements data
-          const orderId = get(order.id) as unknown as number;
-          
-          const measurementData = await GetMeasurementData(orderId);
+          // fetch measurements data using OFID (not order number)
+          const measurementData = await GetMeasurementData(ofid);
 
-          // Determine which article IDs to use
-          let nominalId: number | null = null;
-          let minId: number | null = null;
-          let maxId: number | null = null;
+          // Determine which article_prod ID to use
+          let articleProdId: number | null = null;
           
           if (article) {
-            // Use the selected article's IDs from modal
-            nominalId = article?.article_nominal || null;
-            minId = article?.article_min || null;
-            maxId = article?.article_max || null;
+            // Use the selected article's ID from modal
+            // The article object from test_resolve_by_ofid has:
+            // - article.id: the article_prod_id from the candidate match
+            // - article.original_article.id: also the article_prod_id (most reliable)
+            articleProdId = article?.original_article?.id || article?.id || article?.article_prod_id || null;
+            console.log("PDF Generation - Article selected:", {
+              articleId: article?.id,
+              originalArticleId: article?.original_article?.id,
+              articleProdId: articleProdId,
+              articleName: article?.article_name,
+              hasOriginalArticle: !!article?.original_article,
+            });
           } else {
-            // Fallback to order's article if no selection made
-            nominalId = order.tbl_article?.article_nominal || null;
-            minId = order.tbl_article?.article_min || null;
-            maxId = order.tbl_article?.article_max || null;
+            // Fallback to order's article_id (assuming it now points to tbl_article_prod)
+            articleProdId = order.article_id || order.tbl_article_prod?.id || null;
+            console.log("PDF Generation - Using order's article_id:", {
+              orderArticleId: order.article_id,
+              orderTblArticleProdId: order.tbl_article_prod?.id,
+              articleProdId: articleProdId,
+            });
           }
           
+          console.log("PDF Generation - Fetching customer specifications for article_prod_id:", articleProdId);
           const customerSpecificationsData =
             await GetCustomerSpecificationsData(
-              nominalId ? Number(nominalId) : null,
-              minId ? Number(minId) : null,
-              maxId ? Number(maxId) : null
+              articleProdId ? Number(articleProdId) : null
             );
+          console.log("PDF Generation - Customer specifications data:", {
+            nominal: customerSpecificationsData[0],
+            max: customerSpecificationsData[1],
+            min: customerSpecificationsData[2],
+          });
 
           // customer specifications data
           const nominal_data = customerSpecificationsData[0] || {};
@@ -599,30 +899,27 @@ export default function DownloadOrderListView({
             measurementData,
             "flat_crush"
           );
-          const orderH2OStats = calculateStats(measurementData, "h20");
+          const orderH2OStats = calculateStats(measurementData, "h2o");
 
-          // format delivery date and time
-          const deliveryDate = get(order.exit_date_time);
-          const deliveryDateFormatted = new Date(
-            deliveryDate
-          ).toLocaleDateString("en-GB");
-          const deliveryDateTime = new Date(deliveryDate).toLocaleTimeString(
-            "en-GB",
-            { hour: "2-digit", minute: "2-digit", second: "2-digit" }
-          );
+          // format delivery date only: override from modal, else tbl_prod.delivery_date only (no fallback)
+          let deliveryDateFormatted: string;
+          const dateSource = detailsOverride?.deliveryDate?.trim() || parseDeliveryDateToYYYYMMDD(order?.delivery_date);
+          if (dateSource) {
+            try {
+              const d = new Date(dateSource);
+              deliveryDateFormatted = isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-GB");
+            } catch (_) {
+              deliveryDateFormatted = "";
+            }
+          } else {
+            deliveryDateFormatted = "";
+          }
 
-          // format production date and time
+          // format production date only (no time)
           const productionDate = get(order.created_at);
           const productionDateFormatted = new Date(
             productionDate
           ).toLocaleDateString("en-GB");
-          const productionDateTime = new Date(
-            productionDate
-          ).toLocaleTimeString("en-GB", {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-          });
 
           // dynamically import jspdf to reduce bundle size
           const { default: jsPDF } = await import("jspdf");
@@ -632,20 +929,27 @@ export default function DownloadOrderListView({
           const pageWidth = doc.internal.pageSize.getWidth(); // stores the width for all pages
           const margin = 40;
 
-          // Try to load logo from public path and place it on the PDF page1
+          // Load logo for header (used on page 1, page 2, and in post-pass for all pages)
+          let logo: HTMLImageElement | null = null;
+          let logoBase64: string | undefined;
           try {
-            const logo = new Image();
-            logo.src = "/Img/corexlogo.png";
-            await logo.decode();
-            doc.addImage(
-              logo as HTMLImageElement,
-              "PNG",
-              margin,
-              margin,
-              200,
-              70
-            );
+            const logoImg = new Image();
+            logoImg.src = "/Img/corexlogo.png";
+            await logoImg.decode();
+            logo = logoImg as HTMLImageElement;
+            doc.addImage(logo, "PNG", margin, margin, 200, 70);
+            const canvas = document.createElement("canvas");
+            canvas.width = logo.naturalWidth;
+            canvas.height = logo.naturalHeight;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              ctx.drawImage(logo, 0, 0);
+              logoBase64 = canvas.toDataURL("image/png");
+            }
           } catch {}
+
+          // Blue horizontal line at the top (before headers)
+          DrawHorizontalLine(doc, margin, 0);
 
           // Right header text
           DrawRightHeader(doc, "AQ 30", 1, margin);
@@ -696,7 +1000,6 @@ export default function DownloadOrderListView({
             tableY + 41
           );
           doc.text(deliveryDateFormatted, margin + col1Width + 15, tableY + 43);
-          doc.text(deliveryDateTime, margin + col1Width + 15, tableY + 55);
 
           // Row 3
           doc.text(
@@ -709,13 +1012,12 @@ export default function DownloadOrderListView({
             margin + col1Width + 15,
             tableY + 67
           );
-          doc.text(productionDateTime, margin + col1Width + 15, tableY + 79);
 
-          // Merged cell in last column (spans all 3 rows)
+          // Merged cell in last column (spans all 3 rows) — use OFID, not order number
           doc.setFont("times", "bold");
           doc.setFontSize(10);
           doc.text(
-            `N° of ${orderNo}`,
+            `N° of ${ofid}`,
             margin + col1Width + col2Width + 60,
             tableY + 40,
             { align: "center" }
@@ -783,15 +1085,19 @@ export default function DownloadOrderListView({
             "Innen (mm) / Interieur (mm) / Inside (mm)",
             "Aussen (mm) / exterieur (mm) / Outside (mm)",
             "Flat Crush (kN/m)",
-            "",
+            "H₂O (%)",
           ];
 
-          WriteH2OItalic(doc, margin + 8, specTableY + 5 * rowHeight + 16);
-
+          doc.setFont("times", "italic");
+          doc.setFontSize(10);
           // Fill first column
           for (let r = 0; r < rows; r++) {
             const y = specTableY + r * rowHeight + 16;
-            doc.text(col1Labels[r], margin + 8, y);
+            if (r === 5) {
+              drawH2OLabel(doc, margin + 8, y, { fontSize: 10, style: "italic" });
+            } else {
+              doc.text(col1Labels[r], margin + 8, y);
+            }
           }
 
           // Use row number to determine if length row, inside row, outside row, ...
@@ -813,25 +1119,50 @@ export default function DownloadOrderListView({
                 data = "outside_diameter";
                 break;
               case 4:
-                data = "flat_crush";
+                data = "resistance";
                 break;
               case 5:
-                data = "h20";
+                data = "humidity";
                 break;
             }
 
+            // Format the value for display (H2O/humidity: blank when no data; others: "No data")
+            const formatValue = (value: any): string => {
+              if (value === null || value === undefined || value === "") {
+                return data === "humidity" ? "" : "No data";
+              }
+              const numValue = parseFloat(value);
+              if (isNaN(numValue)) {
+                return data === "humidity" ? "" : "No data";
+              }
+              // Format with decimals only if needed (max 2 decimal places)
+              return formatNumberWithDecimals(numValue);
+            };
+
+            const isEmpty = (v: any) =>
+              v === null || v === undefined || v === "";
+            const isValidNum = (v: any) =>
+              !isEmpty(v) && !isNaN(parseFloat(v));
+            const nominalVal = (nominal_data as any)[data];
+            const maxVal = (max_data as any)[data];
+            const minVal = (min_data as any)[data];
+            // Nominal cell: blank when nominal is missing but min and max exist; otherwise format as usual
+            const nominalDisplay =
+              isEmpty(nominalVal) && isValidNum(maxVal) && isValidNum(minVal)
+                ? ""
+                : formatValue(nominalVal);
+
             // customer specs table is generated BY ROW
             doc.text(
-              String(nominal_data[data] ?? "No data"),
+              nominalDisplay,
               colX2 + specColOtherWidth / 2,
               y,
               {
-                // if data does not exist, put "No data"
                 align: "center",
               }
             );
             doc.text(
-              String(max_data[data] ?? "No data"),
+              formatValue((max_data as any)[data]),
               colX3 + specColOtherWidth / 2,
               y,
               {
@@ -839,7 +1170,7 @@ export default function DownloadOrderListView({
               }
             );
             doc.text(
-              String(min_data[data] ?? "No data"),
+              formatValue((min_data as any)[data]),
               colX4 + specColOtherWidth / 2,
               y,
               {
@@ -950,6 +1281,7 @@ export default function DownloadOrderListView({
 
           // Restore normal style for body rows
           doc.setFont("times", "italic");
+          doc.setFontSize(10);
 
           // First column labels
           const ctrlCol1Labels = [
@@ -979,91 +1311,68 @@ export default function DownloadOrderListView({
             orderH2OStats, // row 5
           ];
 
+          // Control results: only null/undefined are blank. Show "0" for zero (e.g. H2O deviation).
+          // (Leave-blank-when-zero applies only to Flat Crush in the customer specification table.)
+          const formatCtrlValue = (value: number | undefined | null, rowIndex: number): string => {
+            if (value === null || value === undefined) {
+              return "";
+            }
+            // Flat Crush (row 4): display as kN/m by multiplying by 10 (scale from per-10000 to per-1000)
+            const displayValue = rowIndex === 4 ? value * 10 : value;
+            return formatNumberWithDecimals(displayValue) ?? "";
+          };
+
           const ctrlPlaceholderRows = [1, 2, 3, 4, 5]; // body rows
           ctrlPlaceholderRows.forEach((r) => {
             const toUse = ctrlStatsMap[r];
             const y = ctrlTableY + r * ctrlRowHeight + 16;
 
             if (toUse) {
-              doc.text(toUse.mean?.toString() || "", ctrlCenter2, y, {
+              doc.text(formatCtrlValue(toUse.mean, r), ctrlCenter2, y, {
                 align: "center",
               });
-              doc.text(toUse.min?.toString() || "", ctrlCenter3, y, {
+              doc.text(formatCtrlValue(toUse.min, r), ctrlCenter3, y, {
                 align: "center",
               });
-              doc.text(toUse.max?.toString() || "", ctrlCenter4, y, {
+              doc.text(formatCtrlValue(toUse.max, r), ctrlCenter4, y, {
                 align: "center",
               });
-              doc.text(toUse.stdDev?.toString() || "", ctrlCenter5, y, {
+              doc.text(formatCtrlValue(toUse.stdDev, r), ctrlCenter5, y, {
                 align: "center",
               });
             }
           });
 
-          // Horizontal line separator with dark blue color
+          // Horizontal line above footer (page-1 style)
           DrawHorizontalLine(doc, margin, 680);
+          DrawPage1StyleFooter(doc, margin, current_date, customer);
 
-          // Footer table: 3 columns x 2 rows
-          const pageHeight = doc.internal.pageSize.getHeight();
-          const footerTableWidth = pageWidth - 2 * margin;
-          const footerColWidth = Math.floor(footerTableWidth / 3);
-          const footerRowHeight = 15;
-          const footerTableHeight = footerRowHeight * 2;
-
-          // place below the last horizontal bar but keep within page bounds
-          const barY = margin + 670; // last horizontal bar Y position
-          const desiredFooterY = barY + 20; // a bit of spacing under the bar
-          const maxFooterY = pageHeight - margin - footerTableHeight; // lowest Y that still fits
-          const footerTableY = Math.min(desiredFooterY, maxFooterY);
-
-          // Column X positions
-          const fColX1 = margin;
-          const fColX2 = fColX1 + footerColWidth;
-          const fColX3 = fColX2 + footerColWidth;
-
-          doc.setFont("times", "italic");
-          doc.setFontSize(10);
-
-          // First column content
-          doc.text("Datum / Date", fColX1 + 8, footerTableY + 15);
-
-          doc.setFont("times", "bolditalic");
-          doc.text(
-            `${current_date}`,
-            fColX1 + 8,
-            footerTableY + footerRowHeight + 15
-          );
-
-          doc.setFont("times", "italic");
-          // Second column content
-          doc.text(`${customer}`, fColX2 + 8, footerTableY + 15, {
-            align: "center",
-          });
-          doc.text(
-            "Unterschfrit / Signature",
-            fColX2 + 8,
-            footerTableY + footerRowHeight + 15,
-            { align: "center" }
-          );
-
-          // Third column merged content
-          doc.setFont("times", "bold");
-          doc.text(
-            "Document synthese",
-            fColX3 + footerColWidth / 2,
-            footerTableY + footerRowHeight,
-            { align: "center" }
-          );
-
-          // Page 02 start
+          // Page 02 start - ensure proper page break
+          const page1Number = doc.getNumberOfPages();
           doc.addPage();
+          doc.setPage(page1Number + 1); // Explicitly set to the new page (page 2)
 
           // LENGTH DATA - sort by palette count in ascending order
           const lengthData: chartData[] = measurementData // use the length data in the measurements table of the order ID
-            .map((lengthInstance: any) => ({
-              data: lengthInstance["length"],
-              palette_count: Number(lengthInstance["pallete_count"]),
-            }))
+            .map((lengthInstance: any) => {
+              // Ensure length is properly converted to number
+              const length = lengthInstance["length"];
+              let numValue: number | null = null;
+              
+              if (length != null && length !== undefined && length !== '') {
+                if (typeof length === 'string') {
+                  numValue = parseFloat(length);
+                } else {
+                  numValue = Number(length);
+                }
+              }
+              
+              return {
+                data: numValue,
+                palette_count: Number(lengthInstance["palette_num"]) || 0,
+              };
+            })
+            .filter((item): item is chartData => item.data != null && !isNaN(item.data) && item.data !== 0) // Filter out invalid values
             .sort((a: chartData, b: chartData) => a.palette_count - b.palette_count);
 
 
@@ -1074,32 +1383,91 @@ export default function DownloadOrderListView({
           ).then();
 
           // INSIDE DATA - sort by palette count in ascending order
-          const insideData: chartData[] = measurementData // use the inside diameter data in the measurements table of the order ID
+          console.log("DEBUG: Raw measurementData for inside_diameter:", measurementData.map((m: any) => ({
+            id: m.id,
+            palette_num: m.palette_num,
+            inside_diameter: m.inside_diameter,
+            inside_diameter_type: typeof m.inside_diameter,
+            inside_diameter_value: m.inside_diameter
+          })));
+
+          const insideData = measurementData // use the inside diameter data in the measurements table of the order ID
             .map((insideInstance: any) => {
+              // Ensure inside_diameter is properly converted to number
               const insideDiameter = insideInstance["inside_diameter"];
-              const paletteCount = Number(insideInstance["pallete_count"]);
+              let numValue: number | null = null;
               
-              return {
-                data: insideDiameter != null && insideDiameter !== '' ? Number(insideDiameter) : 0,
-                palette_count: paletteCount || 0,
+              console.log("DEBUG: Processing inside_diameter:", {
+                raw: insideDiameter,
+                type: typeof insideDiameter,
+                isNull: insideDiameter === null,
+                isUndefined: insideDiameter === undefined,
+                isString: typeof insideDiameter === 'string',
+                isNumber: typeof insideDiameter === 'number',
+                palette_num: insideInstance["palette_num"]
+              });
+              
+              if (insideDiameter != null && insideDiameter !== undefined && insideDiameter !== '') {
+                if (typeof insideDiameter === 'string') {
+                  numValue = parseFloat(insideDiameter);
+                } else {
+                  numValue = Number(insideDiameter);
+                }
+              }
+              
+              const result = {
+                data: numValue,
+                palette_count: Number(insideInstance["palette_num"]) || 0,
               };
+              
+              console.log("DEBUG: Mapped result:", result);
+              
+              return result;
+            });
+
+          console.log("DEBUG: insideData before filter:", insideData);
+
+          const filteredInsideData: chartData[] = insideData
+            .filter((item): item is chartData => {
+              const keep = item.data != null && !isNaN(item.data) && item.data !== 0;
+              if (!keep) {
+                console.log("DEBUG: Filtering out item:", item);
+              }
+              return keep;
             })
-            .filter(item => item.palette_count > 0) // Filter out invalid palette counts
             .sort((a: chartData, b: chartData) => a.palette_count - b.palette_count);
+
+          console.log("DEBUG: insideData after filter:", filteredInsideData);
+          console.log("DEBUG: insideData count:", filteredInsideData.length);
 
 
           const insideLineChartImage = await generateLineChartImage(
             canvasRef.current!,
-            insideData,
+            filteredInsideData,
             orderInsideDiameterStats["mean"]
           ).then();
 
           // OUTSIDE DATA - sort by palette count in ascending order
           const outsideData: chartData[] = measurementData // use the outside diameter data in the measurements table of the order ID
-            .map((outsideInstance: any) => ({
-              data: outsideInstance["outside_diameter"],
-              palette_count: Number(outsideInstance["pallete_count"]),
-            }))
+            .map((outsideInstance: any) => {
+              // Ensure outside_diameter is properly converted to number
+              const outsideDiameter = outsideInstance["outside_diameter"];
+              let numValue: number | null = null;
+              
+              if (outsideDiameter != null && outsideDiameter !== undefined && outsideDiameter !== '') {
+                if (typeof outsideDiameter === 'string') {
+                  numValue = parseFloat(outsideDiameter);
+                } else {
+                  numValue = Number(outsideDiameter);
+                }
+              }
+              
+              return {
+                data: numValue,
+                palette_count: Number(outsideInstance["palette_num"]) || 0,
+              };
+            })
+            .filter((item): item is chartData => item.data != null && !isNaN(item.data) && item.data !== 0) // Filter out invalid values
             .sort((a: chartData, b: chartData) => a.palette_count - b.palette_count);
 
 
@@ -1110,13 +1478,37 @@ export default function DownloadOrderListView({
           ).then();
 
           // FLAT CRUSH DATA - sort by palette count in ascending order
+          console.log("DEBUG: Raw measurementData for flat_crush:", measurementData.map((m: any) => ({
+            id: m.id,
+            palette_num: m.palette_num,
+            flat_crush: m.flat_crush,
+            flat_crush_type: typeof m.flat_crush
+          })));
+
           const flatCrushData: chartData[] = measurementData // use the flat crush data in the measurements table of the order ID
-            .map((flatCrushInstance: any) => ({
-              data: flatCrushInstance["flat_crush"],
-              palette_count: Number(flatCrushInstance["pallete_count"]),
-            }))
+            .map((flatCrushInstance: any) => {
+              // Ensure flat_crush is properly converted to number
+              const flatCrush = flatCrushInstance["flat_crush"];
+              let numValue: number | null = null;
+              
+              if (flatCrush != null && flatCrush !== undefined && flatCrush !== '') {
+                if (typeof flatCrush === 'string') {
+                  numValue = parseFloat(flatCrush);
+                } else {
+                  numValue = Number(flatCrush);
+                }
+              }
+              
+              return {
+                data: numValue,
+                palette_count: Number(flatCrushInstance["palette_num"]) || 0,
+              };
+            })
+            .filter((item): item is chartData => item.data != null && !isNaN(item.data) && item.data !== 0) // Filter out invalid values
             .sort((a: chartData, b: chartData) => a.palette_count - b.palette_count);
 
+          console.log("DEBUG: flatCrushData after filter:", flatCrushData);
+          console.log("DEBUG: flatCrushData count:", flatCrushData.length);
 
           const flatCrushLineChartImage = await generateLineChartImage(
             canvasRef.current!,
@@ -1124,20 +1516,48 @@ export default function DownloadOrderListView({
             orderFlatCrushStats["mean"]
           );
 
+          console.log("DEBUG: flatCrushLineChartImage generated:", flatCrushLineChartImage ? "YES" : "NO", flatCrushLineChartImage?.substring(0, 50));
+
           // H2O DATA - sort by palette count in ascending order
+          console.log("DEBUG: Raw measurementData for h2o:", measurementData.map((m: any) => ({
+            id: m.id,
+            palette_num: m.palette_num,
+            h2o: m.h2o,
+            h2o_type: typeof m.h2o
+          })));
+
           const h2oData: chartData[] = measurementData // use the h2O data in the measurements table of the order ID
-            .map((h2oInstance: any) => ({
-              data: h2oInstance["h20"],
-              palette_count: Number(h2oInstance["pallete_count"]),
-            }))
+            .map((h2oInstance: any) => {
+              // Ensure h2o is properly converted to number
+              const h2o = h2oInstance["h2o"];
+              let numValue: number | null = null;
+              
+              if (h2o != null && h2o !== undefined && h2o !== '') {
+                if (typeof h2o === 'string') {
+                  numValue = parseFloat(h2o);
+                } else {
+                  numValue = Number(h2o);
+                }
+              }
+              
+              return {
+                data: numValue,
+                palette_count: Number(h2oInstance["palette_num"]) || 0,
+              };
+            })
+            .filter((item): item is chartData => item.data != null && !isNaN(item.data) && item.data !== 0) // Filter out invalid values
             .sort((a: chartData, b: chartData) => a.palette_count - b.palette_count);
-          
+
+          console.log("DEBUG: h2oData after filter:", h2oData);
+          console.log("DEBUG: h2oData count:", h2oData.length);
 
           const h2oLineChartImage = await generateLineChartImage(
             canvasRef.current!,
             h2oData,
             orderH2OStats["mean"]
           );
+
+          console.log("DEBUG: h2oLineChartImage generated:", h2oLineChartImage ? "YES" : "NO", h2oLineChartImage?.substring(0, 50));
 
           // Try to load logo from public path and place it on the PDF
           try {
@@ -1154,14 +1574,14 @@ export default function DownloadOrderListView({
             );
           } catch {}
 
-          // Right header text
-          DrawRightHeader(doc, "AQ 30", 2, margin);
-
-          // Main header text
-          DrawMainHeader(doc, company_name, margin, 2);
-
-          // Horizontal line below headers
-          DrawHorizontalLine(doc, margin, 130);
+          // Page-1 style header (uniform with page 1)
+          if (logo) {
+            doc.addImage(logo, "PNG", margin, margin, 200, 70);
+          }
+          DrawHorizontalLine(doc, margin, 0);
+          DrawRightHeader(doc, "AQ 30", 1, margin);
+          DrawMainHeader(doc, company_name, margin, 1);
+          DrawHorizontalLine(doc, margin, 155);
 
           // Draw the first graph [Length]
           DrawGraphLabel(doc, "length", margin, lengthLineChartImage);
@@ -1172,51 +1592,26 @@ export default function DownloadOrderListView({
           // Draw the third graph [Outside diameter]
           DrawGraphLabel(doc, "outside", margin, outsideLineChartImage);
 
-          // Draw the fourth graph [flat crush]
+          // Draw the fourth graph [Flat Crush]
           DrawGraphLabel(doc, "flat_crush", margin, flatCrushLineChartImage);
 
-          // Draw the last graph [h20]
+          // Draw the fifth graph [H2O]
           DrawGraphLabel(doc, "h2o", margin, h2oLineChartImage);
 
-          // Horizontal line for footer
-          DrawHorizontalLine(doc, margin, 720);
-
-          // Draw Footer
-          DrawFooter(
-            doc,
-            margin, // used to map x position
-            orderNo,
-            current_date
-          );
+          // Page-1 style footer (uniform with page 1)
+          DrawHorizontalLine(doc, margin, 710);
+          DrawPage1StyleFooter(doc, margin, current_date, customer);
 
           // Page 03 start
+          const currentPageBeforeAdd = doc.getNumberOfPages();
           doc.addPage();
-
-          // Try to load logo from public path and place it on the PDF
-          try {
-            const logo = new Image();
-            logo.src = "/Img/corexlogo.png";
-            await logo.decode();
-            doc.addImage(
-              logo as HTMLImageElement,
-              "PNG",
-              margin,
-              margin,
-              200,
-              70
-            );
-          } catch {}
-
-          // Right header text
-          DrawRightHeader(doc, "AQ 30", 3, margin);
-
-          // Main header text
-          DrawMainHeader(doc, company_name, margin, 3);
-
-          // Horizontal line below headers
-          DrawHorizontalLine(doc, margin, 130);
-
-          // Draw the tables in page 03 (pass 2 as startPage since we just added a page, making it page 2)
+          const page3Number = currentPageBeforeAdd + 1;
+          
+          // DrawMeasurementTables will handle headers and footers internally
+          // So we don't need to draw them here to avoid duplication
+          
+          // Draw the tables in page 03 (pass the correct page number)
+          // DrawMeasurementTables handles headers and footers internally, so no need to draw them again
           DrawMeasurementTables(
             doc,
             180,
@@ -1224,19 +1619,50 @@ export default function DownloadOrderListView({
             company_name,
             orderNo,
             current_date,
-            2 // Start on page 2 (the page we just added)
+            page3Number, // Correct page number (3)
+            logoBase64,
+            customer
           );
 
-          // Horizontal line for footer
-          DrawHorizontalLine(doc, margin, 720);
-
-          // Draw Footer
-          DrawFooter(
-            doc,
-            margin, // used to map x position
-            orderNo,
-            current_date
-          );
+          // Draw Flat Crush and H2O table below the measurement tables on page 3
+          // Get the final Y position after the measurement tables
+          const measurementTablesFinalY = (doc as any).lastAutoTable?.finalY || 0;
+          
+          // Check if we have enough space on current page
+          const pageH = doc.internal.pageSize.getHeight();
+          const footerArea = 100;
+          const labelHeight = 20;
+          const tableMinHeight = 50;
+          const spacing = 30;
+          const requiredSpace = labelHeight + spacing + tableMinHeight;
+          const availableSpace = pageH - measurementTablesFinalY - footerArea;
+          
+          let flatCrushH2OTableLabelY: number;
+          
+          if (availableSpace < requiredSpace) {
+            // Not enough space, move to next page — use page-1 style header/footer
+            doc.addPage();
+            const currentPage = doc.getNumberOfPages();
+            doc.setPage(currentPage);
+            const m = 40;
+            if (logo) {
+              doc.addImage(logo, "PNG", m, m, 200, 70);
+            }
+            DrawHorizontalLine(doc, m, 0);
+            DrawRightHeader(doc, "AQ 30", 1, m);
+            DrawMainHeader(doc, company_name, m, 1);
+            DrawHorizontalLine(doc, m, 155);
+            DrawHorizontalLine(doc, m, 710);
+            DrawPage1StyleFooter(doc, m, current_date, customer);
+            flatCrushH2OTableLabelY = m + 120;
+          } else {
+            // Enough space, add spacing after measurement tables
+            flatCrushH2OTableLabelY = measurementTablesFinalY + spacing;
+          }
+          
+          // Start table below the label
+          const flatCrushH2OTableStartY = flatCrushH2OTableLabelY + labelHeight;
+          DrawFlatCrushH2OTable(doc, measurementData, 40, flatCrushH2OTableStartY);
           
           // Generate filename with article designation if article was selected
           let pdfFileName = `quality_control_report_order_${orderNo}`;
@@ -1247,6 +1673,21 @@ export default function DownloadOrderListView({
               .replace(/\s+/g, '_')
               .substring(0, 50);
             pdfFileName = `quality_control_report_order_${orderNo}_${sanitizedDesignation}`;
+          }
+
+          // Post-pass: draw page-1 style header and footer on every page 2..N (covers continuation pages)
+          const totalPages = doc.getNumberOfPages();
+          const m = 40;
+          for (let p = 2; p <= totalPages; p++) {
+            doc.setPage(p);
+            if (logo) {
+              doc.addImage(logo, "PNG", m, m, 200, 70);
+            }
+            DrawHorizontalLine(doc, m, 0);
+            DrawRightHeader(doc, "AQ 30", 1, m);
+            DrawMainHeader(doc, company_name, m, 1);
+            DrawHorizontalLine(doc, m, 155);
+            DrawPage1StyleFooter(doc, m, current_date, customer);
           }
 
           pdfs.push({ doc, filename: pdfFileName }); // collect blobs for zip
@@ -1310,19 +1751,83 @@ export default function DownloadOrderListView({
     }
   };
 
-  // Modified handleClick to first fetch matching articles and show modal
-  const handleClick = async () => {
+  // Open Order details modal first (Order Number + Delivery Date), then fetch articles and proceed
+  const handleClick = () => {
     if (selectedOrders.length === 0) {
       toast.error("Please select an order", { duration: 1000 });
       return;
     }
+    const initial: Record<string, { orderNumber: string; deliveryDate: string }> = {};
+    selectedOrders.forEach((order: any) => {
+      const ofid = String(order?.order_fabrication_control ?? "");
+      if (ofid) initial[ofid] = getInitialOrderDetails(order);
+    });
+    setOrderDetailsForm(initial);
+    setOrderDetailsOverrides({});
+    setIsOrderDetailsEditing(false);
+    setIsOrderDetailsModalOpen(true);
+  };
 
+  const handleOrderDetailsCancel = () => {
+    setIsOrderDetailsModalOpen(false);
+  };
+
+  const handleOrderDetailsConfirm = async () => {
+    const overrides = { ...orderDetailsForm };
+    setOrderDetailsOverrides(overrides);
+    setIsOrderDetailsModalOpen(false);
+
+    // Persist order_number and delivery_date to tbl_prod for each order (by ofid so we always match the right row)
+    for (const order of selectedOrders) {
+      const ofid = String(order?.order_fabrication_control ?? "").trim();
+      if (!ofid) continue;
+      const details = overrides[ofid];
+      const orderNumberRaw = details?.orderNumber?.trim();
+      const orderNumber = orderNumberRaw === "" || orderNumberRaw == null ? null : (() => {
+        const n = parseInt(orderNumberRaw, 10);
+        return isNaN(n) ? null : n;
+      })();
+      const deliveryDate = details?.deliveryDate?.trim() || null;
+      try {
+        const res = await fetch("/api/v1/update_order_details", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ofid,
+            id: order?.id != null && order.id !== "" ? Number(order.id) : undefined,
+            order_number: orderNumber,
+            delivery_date: deliveryDate,
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          toast.error(err?.error ?? `Failed to save order details for OFID ${ofid}`);
+        }
+      } catch (e) {
+        console.error("Failed to update order details:", e);
+        toast.error(`Failed to save order details for OFID ${ofid}`);
+      }
+    }
+
+    fetchArticlesAndProceed(overrides);
+  };
+
+  const setOrderDetail = (ofid: string, field: "orderNumber" | "deliveryDate", value: string) => {
+    setOrderDetailsForm((prev) => ({
+      ...prev,
+      [ofid]: { ...(prev[ofid] ?? { orderNumber: "", deliveryDate: "" }), [field]: value },
+    }));
+  };
+
+  // After Order details are confirmed: fetch matching articles, then either proceed or show article modal
+  const fetchArticlesAndProceed = async (
+    orderDetailsConfirmed?: Record<string, { orderNumber: string; deliveryDate: string }>
+  ) => {
     setIsFetchingMatches(true);
     setIsLoading(true);
     setButtonLabel("Checking matches...");
 
     try {
-      // Fetch matching articles for each selected order
       const matchesByOfid: Record<string, any[]> = {};
 
       await Promise.all(
@@ -1335,17 +1840,30 @@ export default function DownloadOrderListView({
         })
       );
 
-      // Reset selected articles when opening modal
+      const allHaveSingleArticle = Object.values(matchesByOfid).every(
+        (articles) => articles && articles.length === 1
+      );
+
+      if (allHaveSingleArticle) {
+        const autoSelected: Record<string, Record<number, any>> = {};
+        Object.entries(matchesByOfid).forEach(([ofid, articles]) => {
+          if (articles && articles.length === 1) {
+            const article = articles[0];
+            autoSelected[ofid] = { [article.id]: article };
+          }
+        });
+        setSelectedArticlesByOfid(autoSelected);
+        setIsFetchingMatches(false);
+        proceedWithPDFGeneration(autoSelected, orderDetailsConfirmed ?? orderDetailsOverrides);
+        return;
+      }
+
       setSelectedArticlesByOfid({});
-      
-      // Show modal with matching articles
       setMatchingArticlesByOfid(matchesByOfid);
       setIsModalOpen(true);
       setIsLoading(false);
       setButtonLabel("Download");
       setIsFetchingMatches(false);
-      
-      return; // Don't proceed with PDF generation yet - user must click "Proceed"
     } catch (error) {
       console.error("Error fetching matching articles:", error);
       toast.error("Failed to check matching articles");
@@ -1363,12 +1881,19 @@ export default function DownloadOrderListView({
       
       if (ofidSelections[articleId]) {
         // Deselect: remove from selection
-        const newOfidSelections = { ...ofidSelections };
-        delete newOfidSelections[articleId];
-        return {
-          ...prev,
-          [ofid]: Object.keys(newOfidSelections).length > 0 ? newOfidSelections : undefined,
-        };
+        const { [articleId]: _, ...newOfidSelections } = ofidSelections;
+        
+        if (Object.keys(newOfidSelections).length > 0) {
+          // Keep the ofid key with remaining selections
+          return {
+            ...prev,
+            [ofid]: newOfidSelections,
+          };
+        } else {
+          // Remove the ofid key entirely if no selections remain
+          const { [ofid]: __, ...rest } = prev;
+          return rest;
+        }
       } else {
         // Select: add to selection
         return {
@@ -1435,6 +1960,135 @@ export default function DownloadOrderListView({
         )}
         {isLoading ? "Generating PDF..." : isFetchingMatches ? "Checking matches..." : buttonLabel}
       </button>
+
+      {/* Order details modal: Order Number + Delivery Date before PDF download */}
+      {isOrderDetailsModalOpen && mounted && typeof window !== "undefined" && createPortal(
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50"
+          onClick={handleOrderDetailsCancel}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl w-11/12 max-w-2xl max-h-[90vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-xl font-semibold text-gray-800">Order details for PDF</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Review or edit Order number and Delivery date. These will appear on the generated PDF.
+              </p>
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <div className="space-y-4">
+                {selectedOrders.map((order: any) => {
+                  const ofid = String(order?.order_fabrication_control ?? "");
+                  const details = orderDetailsForm[ofid] ?? getInitialOrderDetails(order);
+                  return (
+                    <div key={ofid} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-2 h-2 bg-blue-600 rounded-full" />
+                        <span className="font-medium text-gray-700">OFID: {ofid}</span>
+                      </div>
+                      <div className="flex flex-wrap items-end gap-4">
+                        <div className="min-w-0 flex-1">
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Order number</label>
+                          {isOrderDetailsEditing ? (
+                            <input
+                              type="text"
+                              value={details.orderNumber}
+                              onChange={(e) => setOrderDetail(ofid, "orderNumber", e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
+                            />
+                          ) : (
+                            <p className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900">{details.orderNumber || "—"}</p>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <label className="block text-xs font-medium text-gray-500 mb-1">Delivery date</label>
+                          {isOrderDetailsEditing ? (
+                            <div className="relative">
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="dd/mm/yyyy"
+                                value={details.deliveryDate ? formatToDDMMYYYY(details.deliveryDate) : ""}
+                                onChange={(e) => {
+                                  const raw = e.target.value.trim();
+                                  const stored = parseDDMMYYYYToStorage(raw);
+                                  if (raw === "") setOrderDetail(ofid, "deliveryDate", "");
+                                  else if (stored) setOrderDetail(ofid, "deliveryDate", stored);
+                                }}
+                                className="w-full px-3 py-2 pr-9 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
+                              />
+                              <input
+                                ref={(el) => {
+                                  deliveryDatePickerRefs.current[ofid] = el;
+                                }}
+                                type="date"
+                                value={details.deliveryDate}
+                                onChange={(e) => setOrderDetail(ofid, "deliveryDate", e.target.value)}
+                                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                                aria-hidden
+                                tabIndex={-1}
+                              />
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const picker = deliveryDatePickerRefs.current[ofid];
+                                  if (!picker) return;
+                                  if (typeof picker.showPicker === "function") {
+                                    picker.showPicker();
+                                  } else {
+                                    picker.focus();
+                                    picker.click();
+                                  }
+                                }}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-blue-700 transition z-10"
+                                aria-label="Open delivery date picker"
+                              >
+                                <Calendar className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900">{formatToDDMMYYYY(details.deliveryDate)}</p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsOrderDetailsEditing((e) => !e)}
+                          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-blue-600 rounded-lg hover:bg-blue-700 hover:border-blue-700 shrink-0 shadow-sm"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex flex-wrap items-center justify-end gap-3">
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleOrderDetailsCancel}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOrderDetailsConfirm}
+                  className="px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Modal for showing matching articles - rendered via portal outside flex container */}
       {isModalOpen && mounted && typeof window !== 'undefined' && createPortal(

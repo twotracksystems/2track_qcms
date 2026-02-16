@@ -3,17 +3,60 @@ import React, { useEffect, useRef, useState } from "react";
 import { Field, FieldArray, Form, Formik } from "formik";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
-import { QueryClient, useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { Pencil } from "lucide-react";
 import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
+import { formatNumberWithDecimals } from "@/utils/formatNumber";
 
-export default function EditArticleListCopy(params:any) {
+type ViewArticleListProps = {
+  id?: string;
+  params?: string | { params?: string };
+  onClose?: () => void;
+};
+
+export default function EditArticleListCopy({
+  id,
+  params,
+  onClose,
+}: ViewArticleListProps) {
   const router = useRouter();
   useEscapeNavigation("/dashboard/article_management");
-  const id = params.params;
+  const resolvedId =
+    id ?? (typeof params === "string" ? params : params?.params);
+
+  const [customerId, setCustomerId] = useState<string | null>(null);
+  const [customerName, setCustomerName] = useState("");
+  const parseNumericValue = (value: string | number | null | undefined): number | null => {
+    if (value === null || value === undefined || value === "") return null;
+    const cleaned = String(value).replace(/,/g, "");
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const normalizeFlatCrushForDisplay = (
+    value: string | number | null | undefined
+  ): number | null => {
+    const normalized = parseNumericValue(value);
+    if (normalized === null) return null;
+    return normalized > 1000 ? normalized / 1000 : normalized;
+  };
+  // Treat 0 and 0.000 as no value so single-value rule applies for resistance
+  const treatZeroAsNoValue = (value: number | null): number | null => {
+    if (value == null) return null;
+    if (typeof value === "number" && (value === 0 || Math.abs(value) < 1e-9)) return null;
+    return value;
+  };
+
+  const normalizeFlatCrushForSave = (
+    value: string | number | null | undefined
+  ): number | null => {
+    const normalized = parseNumericValue(value);
+    if (normalized === null) return null;
+    return normalized > 1000 ? normalized : normalized * 1000;
+  };
 
   const [initialValues,setInitialValues] = useState({ 
     rows: [
@@ -30,12 +73,12 @@ export default function EditArticleListCopy(params:any) {
         OutsideDiameterNominal: "",
         OutsideDiameterMin: "",
         OutsideDiameterMax: "",
-        FlatCrushNominal: "",
-        FlatCrushMin: "",
-        FlatCrushMax: "",
-        H20Nominal: "",
-        H20Min: "",
-        H20Max: "",
+        ResistanceNominal: "",
+        ResistanceMin: "",
+        ResistanceMax: "",
+        HumidityNominal: "",
+        HumidityMin: "",
+        HumidityMax: "",
         NumberControl: "",
       },
     ],
@@ -44,257 +87,165 @@ export default function EditArticleListCopy(params:any) {
   
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [nominalID, setNominalID] = useState<string | null>(null);
-  const [minID, setMinID] = useState<string | null>(null);
-  const [maxID, setMaxID] = useState<string | null>(null);
 
+  // Fetch data directly from tbl_article_prod using the id parameter (which is tbl_article_prod.id)
   const {
-    data: articleData,
-    isLoading: isArticleLoading,
-    isSuccess: isArticleSuccess,
-    isError: isArticleError,
+    data: articleProdData,
+    isLoading: isArticleProdLoading,
+    isSuccess: isArticleProdSuccess,
+    isError: isArticleProdError,
   } = useQuery({
-    queryKey: ["article", id],
+    queryKey: ["article_prod", resolvedId],
     queryFn: async () => {
-      const response = await fetch(`/api/v1/getonearticle/?id=${id}`);
+      const response = await fetch(`/api/v1/getonearticleprod/?id=${resolvedId}`);
       if (!response.ok) {
-        throw new Error(`Failed to fetch user data: ${response.status}`);
+        throw new Error(`Failed to fetch article prod data: ${response.status}`);
       }
       return response.json(); // Expecting an array
     },
-    enabled: !!id, // Only fetch data if id exists
+    enabled: !!resolvedId, // Only fetch data if id exists
   });
-  console.log("Gatherd data:", articleData);
-  useEffect(() => {
-    if (isArticleSuccess && articleData && articleData.length > 0) {
-      const user = articleData[0];
-      setNominalID(user.article_nominal);
-      setMinID(user.article_min);
-      setMaxID(user.article_max);
-      setInitialValues((prev) => ({
-        ...prev,
-        number_control: user.number_control,
-        rows: prev.rows.map((row) => ({
-          ...row,
-          id_number: user.id_number,
-          customer_id: user.customer_id,
-          NumberControl: user.number_control,
-        })),
-      }));
-      }
-  }, [isArticleSuccess, articleData]);
-  
-  const {
-    data: nominalData,
-    isLoading: isNominalLoading,
-    isSuccess: isNominalSuccess,
-    isError: isNominalError,
-  } = useQuery({
-    queryKey: ["article_nominal", nominalID],
-    queryFn: async () => {
-      const response = await fetch(`/api/v1/getonearticlenominal/?id=${nominalID}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch user data: ${response.status}`);
-      }
-      return response.json(); // Expecting an array
-    },
-    enabled: !!id, // Only fetch data if id exists
-  });
-  console.log("Gatherd data:", nominalData);
-  useEffect(() => {
-    if (isNominalSuccess && nominalData?.length > 0) {
-      setInitialValues((prev) => ({
-        ...prev,
-        rows: prev.rows.map((row) => ({
-          ...row,
-          LengthNominal: nominalData[0].length,
-          InsideDiameterNominal: nominalData[0].inside_diameter,
-          OutsideDiameterNominal: nominalData[0].outside_diameter,
-          // FlatCrushNominal: nominalData[0].flat_crush,
-          FlatCrushNominal: parseFloat(nominalData[0].flat_crush).toFixed(2),
-          H20Nominal: nominalData[0].h20,
-        })),
-      }));
-    }
-  }, [isNominalSuccess, nominalData]);
-  
 
   const {
-    data: minData,
-    isLoading: isMinLoading,
-    isSuccess: isMinSuccess,
-    isError: isMinError,
-    error: userError,
+    data: articleMetaData,
+    isSuccess: isArticleMetaSuccess,
   } = useQuery({
-    queryKey: ["article_min",minID],
+    queryKey: ["article_meta", resolvedId],
     queryFn: async () => {
-      const response = await fetch(`/api/v1/getonearticlemin/?id=${minID}`);
+      const response = await fetch(`/api/v1/getonearticle/?id=${resolvedId}`);
       if (!response.ok) {
-        throw new Error(`Failed to fetch user data: ${response.status}`);
+        throw new Error("Failed to load article metadata");
       }
-      return response.json(); // Expecting an array
-    },
-    enabled: !!id, // Only fetch data if id exists
-  });
-  console.log("Gatherd data:", minData);
-  useEffect(() => {
-    if (isMinSuccess && minData?.length > 0) {
-      setInitialValues((prev) => ({
-        ...prev,
-        rows: prev.rows.map((row) => ({
-          ...row,
-          LengthMin: minData[0].length,
-          InsideDiameterMin: minData[0].inside_diameter,
-          OutsideDiameterMin: minData[0].outside_diameter,
-          FlatCrushMin: parseFloat(minData[0].flat_crush).toFixed(2),
-          H20Min: minData[0].h20,
-        })),
-      }));
-    }
-  }, [isMinSuccess, minData]);
-
-  const {
-    data: maxData,
-    isLoading: isMaxLoading,
-    isSuccess: isMaxSuccess,
-    isError: isMaxError,
-    error: maxError,
-  } = useQuery({
-    queryKey: ["article_max", maxID],
-    queryFn: async () => {
-      const response = await fetch(`/api/v1/getonearticlemax/?id=${maxID}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch user data: ${response.status}`);
-      }
-      return response.json(); // Expecting an array
-    },
-    enabled: !!id, // Only fetch data if id exists
-  });
-  console.log("Gatherd data:", maxData);
-  useEffect(() => {
-      if (isMaxSuccess && maxData?.length > 0) {
-        setInitialValues((prev) => ({
-          ...prev,
-          rows: prev.rows.map((row) => ({
-            ...row,
-            LengthMax: maxData[0].length,
-            InsideDiameterMax: maxData[0].inside_diameter,
-            OutsideDiameterMax: maxData[0].outside_diameter,
-            // FlatCrushMax: maxData[0].flat_crush,
-            FlatCrushMax: parseFloat(maxData[0].flat_crush).toFixed(2),
-            H20Max: maxData[0].h20,
-          })),
-        }));
-      }
-    }, [isMaxSuccess, maxData]);
-
-  const UpdateNominalMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await fetch(`/api/v1/edit_article_nominal/?id=${nominalID}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
       return response.json();
     },
-    onError: (error) => {
-      toast.error("Failed to update article");
-    },
-    onSuccess: (data) => {
-      toast.success("Article updated Successfully");
-      router.push("/dashboard/article_management");
-    },
-    onMutate: (data) => {
-      return data;
-    },
-  });
-  
-  const UpdateMinMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await fetch(`/api/v1/edit_article_min/?id=${nominalID}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-      return response.json();
-    },
-    onError: (error) => {
-      toast.error("Failed to update article");
-    },
-    onSuccess: (data) => {
-      toast.success("Article updated Successfully");
-      router.push("/dashboard/article_management");
-    },
-    onMutate: (data) => {
-      return data;
-    },
+    enabled: !!resolvedId,
   });
 
-  const UpdateMaxMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await fetch(`/api/v1/edit_article_max/?id=${nominalID}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
+  const {
+    data: customerData,
+    isSuccess: isCustomerSuccess,
+  } = useQuery({
+    queryKey: ["customer_detail", customerId],
+    queryFn: async () => {
+      const response = await fetch(`/api/v1/getonecustomer/?id=${customerId}`);
+      if (!response.ok) {
+        throw new Error("Failed to load customer");
+      }
       return response.json();
     },
-    onError: (error) => {
-      toast.error("Failed to update article");
-    },
-    onSuccess: (data) => {
-      toast.success("Article updated Successfully");
-      router.push("/dashboard/article_management");
-    },
-    onMutate: (data) => {
-      return data;
-    },
+    enabled: !!customerId,
   });
   
+  console.log("Gathered article_prod data:", articleProdData);
   
-    const [page, setPage] = useState(1);
-      const searchInput = useRef<HTMLInputElement>(null);
-      const [limit] = useState(10);
-      const [search, setSearch] = useState("");
-    
-      const [asssing_id, setAssign_id] = useState<string | null>(null);
-     const { data: customerData } = useQuery({
-        queryKey: ["get_customer", page, search, limit],
-        queryFn: async () => {
-          console.log("Fetching Data with:", { page, search, limit }); // Debug
-          const response = await fetch(`/api/v1/get_customer`, {
-            method: "GET",
-            headers: {
-              Accept: "*/*",
-              "User-Agent": "Thunder Client (https://www.thunderclient.com)",
-            },
-            redirect: "follow",
-          });
-          const result = await response.json();
-    
-          console.log("API Response:", result); // Debug Response
-          if (response.ok) {
-            return result;
-          } else {
-            throw new Error("Something went wrong while fetching customer list.");
-          }
-        },
-        retry: 1,
-      });
+  useEffect(() => {
+    if (isArticleProdSuccess && articleProdData?.length > 0) {
+      const articleData = articleProdData[0];
       
-      console.log("Customer Data:", customerData);
-    
-      const customerOptions =
-        customerData?.data?.map((customer: any) => ({
-          value: customer.id,
-          label: `${customer.company_name}`,
-        })) || [];
+      // Resistance: if only one value (min or max), use it for min, max, and nominal; if both min and max, leave nominal blank. Treat 0 as no value.
+      const resistanceMinValue = treatZeroAsNoValue(normalizeFlatCrushForDisplay(
+        articleData.resistance_min
+      ));
+      const resistanceMaxValue = treatZeroAsNoValue(normalizeFlatCrushForDisplay(
+        articleData.resistance_max
+      ));
+      const hasResistanceMin = resistanceMinValue != null;
+      const hasResistanceMax = resistanceMaxValue != null;
+      const nominalResistance =
+        hasResistanceMin && hasResistanceMax
+          ? ""
+          : hasResistanceMin
+            ? formatNumberWithDecimals(resistanceMinValue)
+            : hasResistanceMax
+              ? formatNumberWithDecimals(resistanceMaxValue)
+              : "";
+      const displayResistanceMin = hasResistanceMin ? formatNumberWithDecimals(resistanceMinValue) : (hasResistanceMax ? formatNumberWithDecimals(resistanceMaxValue) : "");
+      const displayResistanceMax = hasResistanceMax ? formatNumberWithDecimals(resistanceMaxValue) : (hasResistanceMin ? formatNumberWithDecimals(resistanceMinValue) : "");
+      
+      // Humidity (H2O): same logic as resistance - single value → use for nominal/min/max; both → nominal blank; treat 0 as no value
+      const humidityMinValue = treatZeroAsNoValue(parseNumericValue(articleData.humidty_min));
+      const humidityMaxValue = treatZeroAsNoValue(parseNumericValue(articleData.humidity_max));
+      const hasHumidityMin = humidityMinValue != null;
+      const hasHumidityMax = humidityMaxValue != null;
+      const nominalHumidity =
+        hasHumidityMin && hasHumidityMax
+          ? ""
+          : hasHumidityMin
+            ? formatNumberWithDecimals(humidityMinValue)
+            : hasHumidityMax
+              ? formatNumberWithDecimals(humidityMaxValue)
+              : "";
+      const displayHumidityMin = hasHumidityMin ? formatNumberWithDecimals(humidityMinValue) : (hasHumidityMax ? formatNumberWithDecimals(humidityMaxValue) : "");
+      const displayHumidityMax = hasHumidityMax ? formatNumberWithDecimals(humidityMaxValue) : (hasHumidityMin ? formatNumberWithDecimals(humidityMinValue) : "");
+
+      setInitialValues((prev) => ({
+        ...prev,
+        rows: prev.rows.map((row) => ({
+          ...row,
+          // ID Number: Use article column from tbl_article_prod
+          id_number: articleData.article || "",
+          // Customer Name: Use article_name from tbl_article_prod
+          article_name: customerName || articleData.article_name || "",
+          // Number of Control: Not available in tbl_article_prod, set to empty
+          NumberControl: "",
+          // Nominal values from tbl_article_prod
+          LengthNominal: articleData.length || "",
+          InsideDiameterNominal: articleData.inside_diameter || "",
+          OutsideDiameterNominal: articleData.outside_diameter || "",
+          ResistanceNominal: nominalResistance,
+          HumidityNominal: nominalHumidity,
+          // Min values from tbl_article_prod
+          LengthMin: articleData.length_min || "",
+          InsideDiameterMin: articleData.inside_diameter_min || "",
+          OutsideDiameterMin: articleData.outside_diameter_min || "",
+          ResistanceMin: displayResistanceMin,
+          HumidityMin: displayHumidityMin,
+          // Max values from tbl_article_prod
+          LengthMax: articleData.length_max || "",
+          InsideDiameterMax: articleData.inside_diameter_max || "",
+          OutsideDiameterMax: articleData.outside_diameter_max || "",
+          ResistanceMax: displayResistanceMax,
+          HumidityMax: displayHumidityMax,
+        })),
+      }));
+    }
+  }, [isArticleProdSuccess, articleProdData, customerName]);
+
+  useEffect(() => {
+    if (isArticleMetaSuccess && articleMetaData?.length > 0) {
+      const meta = articleMetaData[0];
+      setCustomerId(meta?.customer_id ? String(meta.customer_id) : null);
+    }
+  }, [isArticleMetaSuccess, articleMetaData]);
+
+  useEffect(() => {
+    if (isCustomerSuccess && customerData?.length > 0) {
+      setCustomerName(customerData[0]?.company_name || "");
+    }
+  }, [isCustomerSuccess, customerData]);
+
+  const UpdateArticleProdMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await fetch(`/api/v1/edit_article_prod/?id=${resolvedId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+      return response.json();
+    },
+    onError: (error) => {
+      toast.error("Failed to update article");
+    },
+    onSuccess: (data) => {
+      toast.success("Article updated Successfully");
+      router.push("/dashboard/article_management");
+    },
+    onMutate: (data) => {
+      return data;
+    },
+  });
     
   return (
     <div className="flex flex-col w-full p-12 mx-auto text-black">
@@ -311,29 +262,25 @@ export default function EditArticleListCopy(params:any) {
         initialValues={initialValues}
         enableReinitialize={true}
         onSubmit={async (values) => {
-          for(const row of values.rows){
-            await UpdateNominalMutation.mutateAsync({
+          for (const row of values.rows) {
+            const resistanceMin = normalizeFlatCrushForSave(row.ResistanceMin);
+            const resistanceMax = normalizeFlatCrushForSave(row.ResistanceMax);
+            // Update single article_prod record with all values
+            await UpdateArticleProdMutation.mutateAsync({
               length: row.LengthNominal,
               inside_diameter: row.InsideDiameterNominal,
               outside_diameter: row.OutsideDiameterNominal,
-              flat_crush: row.FlatCrushNominal,
-              h20: row.H20Nominal,
+              length_min: row.LengthMin,
+              inside_diameter_min: row.InsideDiameterMin,
+              outside_diameter_min: row.OutsideDiameterMin,
+              length_max: row.LengthMax,
+              inside_diameter_max: row.InsideDiameterMax,
+              outside_diameter_max: row.OutsideDiameterMax,
+              resistance_min: resistanceMin,
+              resistance_max: resistanceMax,
+              humidty_min: row.HumidityMin,
+              humidity_max: row.HumidityMax,
             });
-            await UpdateMinMutation.mutateAsync({
-              length: row.LengthMin,
-              inside_diameter: row.InsideDiameterMin,
-              outside_diameter: row.OutsideDiameterMin,
-              flat_crush: row.FlatCrushMin,
-              h20: row.H20Min,
-            });
-            await UpdateMaxMutation.mutateAsync({
-              length: row.LengthMax,
-              inside_diameter: row.InsideDiameterMax,
-              outside_diameter: row.OutsideDiameterMax,
-              flat_crush: row.FlatCrushMax,
-              h20: row.H20Max,
-            });
-
           }
         }
       }
@@ -362,25 +309,12 @@ export default function EditArticleListCopy(params:any) {
                                                                   <div className="inline gap-2">
                                           <label className="label">Customer Name</label>
                                           <Field
-                                          disabled
-                                            as="select"
-                                            name={`rows.${index}.customer_id`}
-                                            className="select select-bordered"
-                                            defaultValue=""
-                                            onChange={(e:any) => {
-                                              // Update Formik state directly
-                                              setFieldValue(`rows.${index}.customer_id`, e.target.value);
-                                            }}
-                                          >
-                                            <option value="" disabled>
-                                              Select Customer
-                                            </option>
-                                            {customerOptions?.map((option: any) => (
-                                              <option key={option.value} value={option.value}>
-                                                {option.label}
-                                              </option>
-                                            ))}
-                                          </Field>
+                                            readOnly
+                                            name={`rows.${index}.article_name`}
+                                            type="text"
+                                            placeholder="Article Name"
+                                            className="input input-bordered"
+                                          />
                                         </div>
                                         
                                                                   <div className="inline gap-2">
@@ -399,12 +333,22 @@ export default function EditArticleListCopy(params:any) {
                                                             </div>
                     <div className="flex place-content-end gap-3">
                       
-                      <Link
-                        href="/dashboard/article_management"
-                        className="btn btn-accent"
-                      >
-                        Back
-                      </Link>
+                      {onClose ? (
+                        <button
+                          type="button"
+                          className="btn btn-accent"
+                          onClick={onClose}
+                        >
+                          Close
+                        </button>
+                      ) : (
+                        <Link
+                          href="/dashboard/article_management"
+                          className="btn btn-accent"
+                        >
+                          Back
+                        </Link>
+                      )}
                     </div>
                     <div className="text-black overflow-auto">
                       <table className="table relative text-center overflow-auto">
@@ -518,16 +462,14 @@ export default function EditArticleListCopy(params:any) {
                               </tr>
                           
                         </tbody>
-                        {/* tbody for flat crush */}
+                        {/* tbody for resistance */}
                         <tbody>
-                          {values.rows.map((row, index) => (
-                            <React.Fragment key={index}>
                               <tr>
                                 <td>Flat Crush</td>
                                 <td>
                                   <Field
                                   readOnly
-                                    name={`rows.${index}.FlatCrushNominal`}
+                                    name={`rows.${index}.ResistanceNominal`}
                                     type="text"
                                     className="input input-bordered"
                                   />
@@ -535,7 +477,7 @@ export default function EditArticleListCopy(params:any) {
                                 <td>
                                   <Field
                                   readOnly
-                                    name={`rows.${index}.FlatCrushMin`}
+                                    name={`rows.${index}.ResistanceMin`}
                                     type="text"
                                     className="input input-bordered"
                                   />
@@ -543,25 +485,22 @@ export default function EditArticleListCopy(params:any) {
                                 <td>
                                   <Field
                                   readOnly
-                                    name={`rows.${index}.FlatCrushMax`}
+                                    name={`rows.${index}.ResistanceMax`}
                                     type="text"
                                     className="input input-bordered"
                                   />
                                 </td>
 
                               </tr>
-                            </React.Fragment>
-                          ))}
                         </tbody>
-                        {/* tbody for h20 */}
+                        {/* tbody for humidity */}
                         <tbody>
-                         
                               <tr>
-                                <td>H20</td>
+                                <td>H₂O</td>
                                 <td>
                                   <Field
                                   readOnly
-                                    name={`rows.${index}.H20Nominal`}
+                                    name={`rows.${index}.HumidityNominal`}
                                     type="text"
                                     className="input input-bordered"
                                   />
@@ -569,7 +508,7 @@ export default function EditArticleListCopy(params:any) {
                                 <td>
                                   <Field
                                   readOnly
-                                    name={`rows.${index}.H20Min`}
+                                    name={`rows.${index}.HumidityMin`}
                                     type="text"
                                     className="input input-bordered"
                                   />
@@ -577,7 +516,7 @@ export default function EditArticleListCopy(params:any) {
                                 <td>
                                   <Field
                                   readOnly
-                                    name={`rows.${index}.H20Max`}
+                                    name={`rows.${index}.HumidityMax`}
                                     type="text"
                                     className="input input-bordered"
                                   />
@@ -585,8 +524,8 @@ export default function EditArticleListCopy(params:any) {
 
                           
                               </tr>
-                          
-                        </tbody>  </React.Fragment>
+                        </tbody>
+                            </React.Fragment>
                           ))}
                       </table>
                     </div>

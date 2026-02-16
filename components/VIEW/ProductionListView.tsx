@@ -2,22 +2,23 @@
 import { createClient } from "@/utils/supabase/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Formik, Form, FieldArray, Field, ErrorMessage } from "formik";
-import { Eye, Pencil, Search, Slice, Trash } from "lucide-react";
+import { Eye, Pencil, Slice, Trash } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import React, { useEffect, useState, useRef, use } from "react";
+import React, { useEffect, useState, use } from "react";
 import toast from "react-hot-toast";
 import * as Yup from "yup";
 import { FormSelect } from "../UI/FormInput";
 import { DateTime } from "luxon";
 import { start } from "repl";
 import ImprovedPagination from "../UI/ImprovedPagination";
+import SuggestiveSearchInput from "../UI/SuggestiveSearchInput";
 
 export default function OrderListView() {
   const [page, setPage] = useState(1);
-  const searchInput = useRef<HTMLInputElement>(null);
   const [limit] = useState(10);
   const [search, setSearch] = useState("");
+  const [searchInputValue, setSearchInputValue] = useState("");
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -374,34 +375,19 @@ export default function OrderListView() {
   return (
     <div className="overflow-x-auto w-full text-black">
       <div className="flex-1 flex flex-col gap-y-3 h-full min-w-0 px-6 py-4">
-        <div className="w-full flex flex-nowrap gap-3 items-end bg-gradient-to-br from-blue-50/30 to-blue-100/20 p-4 rounded-xl shadow-lg border border-blue-200/30 overflow-x-auto backdrop-blur-sm">
+        <div className="w-full flex flex-nowrap gap-3 items-end bg-gradient-to-br from-blue-50/30 to-blue-100/20 p-4 rounded-xl shadow-lg border border-blue-200/30 overflow-x-auto overflow-y-visible backdrop-blur-sm">
           {/* Search Bar - Pill Shape Design */}
           <div className="flex-1 min-w-[180px]">
-            <div className="relative">
-              <input
-                type="text"
-                ref={searchInput}
-                className="w-full px-4 py-2.5 pr-10 rounded-full bg-white text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all duration-300 shadow-md hover:shadow-lg"
-                placeholder="Search OF ID"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    const searchValue = searchInput.current?.value || "";
-                    console.log("Search Triggered:", searchValue);
-                    setSearch(searchValue);
-                    setPage(1);
-                  }
-                }}
-              />
-              <button
-                onClick={() => {
-                  setSearch(searchInput.current?.value || "");
-                  setPage(1);
-                }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-blue-900 transition-colors duration-200"
-              >
-                <Search className="h-4 w-4" />
-              </button>
-            </div>
+            <SuggestiveSearchInput
+              value={searchInputValue}
+              onChange={setSearchInputValue}
+              placeholder="Search OF ID"
+              onSearch={() => {
+                const nextValue = searchInputValue.trim();
+                setSearch(nextValue);
+                setPage(1);
+              }}
+            />
           </div>
 
           {/* Refresh Button */}
@@ -412,9 +398,7 @@ export default function OrderListView() {
               setEndDate("");
               setSearch("");
               setPage(1);
-              if (searchInput.current) {
-                searchInput.current.value = "";
-              }
+              setSearchInputValue("");
             }}
           >
             Refresh

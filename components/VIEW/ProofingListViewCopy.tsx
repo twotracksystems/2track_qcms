@@ -30,7 +30,7 @@ export default function MeasurementListViewCopy(params: any) {
     };
 
     fetchUserEmail();
-  }, []);
+  }, [supabase.auth]);
 
  console.log("the user id is:", userID);
 

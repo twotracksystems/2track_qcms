@@ -117,3 +117,6 @@ npx tsx utils/parseDesignation.test.ts
 ✅ **Null-safe** - Handles null/undefined inputs gracefully  
 
 
+
+
+

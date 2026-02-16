@@ -270,6 +270,7 @@ export function FormSearchableSelect({
         </div>
 
         <Select
+          instanceId={name}
           name={name}
           className="text-lg  bg-white select-bordered mx-auto w-full max-w-md"
           value={options.find((option) => option.value === field.value) || null}

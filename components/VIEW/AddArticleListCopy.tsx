@@ -1,19 +1,19 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ErrorMessage, Field, FieldArray, Form, Formik } from "formik";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
-import { QueryClient, useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import Select from 'react-select';
-import { Pencil, Plus, Radical } from "lucide-react";
+import { Plus } from "lucide-react";
 import * as Yup from "yup";
 import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
+import SuggestiveSearchInput from "@/components/UI/SuggestiveSearchInput";
+import { normalizeDecimalInput } from "@/utils/parseDecimal";
 
 export default function AddArticleListCopy() {
-  const queryClient = new QueryClient();
   const query = usePathname();
   console.log(query);
   // const id = params.params;
@@ -24,9 +24,6 @@ export default function AddArticleListCopy() {
   const [useremail, setUseremail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userID, setUserID] = useState<string | null>(null);
-  const [nominalId, setNominalId] = useState<string | null>(null);
-  const [minId, setMinId] = useState<string | null>(null);
-  const [maxId, setMaxId] = useState<string | null>(null);
   useEffect(() => {
     const fetchUserEmail = async () => {
       const { data } = await supabase.auth.getUser();
@@ -38,15 +35,32 @@ export default function AddArticleListCopy() {
     fetchUserEmail();
   }, [supabase.auth]);
 
+  
+
   console.log("the user id is:", userID);
+
+  const normalizeFlatCrushForDisplay = (
+    value: string | number | null | undefined
+  ): number | null => {
+    const normalized = normalizeDecimalInput(value);
+    if (normalized === null) return null;
+    return normalized > 1000 ? normalized / 1000 : normalized;
+  };
+
+  const normalizeFlatCrushForSave = (
+    value: string | number | null | undefined
+  ): number | null => {
+    const normalized = normalizeDecimalInput(value);
+    if (normalized === null) return null;
+    return normalized > 1000 ? normalized : normalized * 1000;
+  };
 
   const initialValues = {
     rows: [
       {
-        // article_name: "",
         id_number: "",
+        designation_article: "",
         article_name: "",
-        customer_id: "",
         LengthNominal: "",
         LengthMin: "",
         LengthMax: "",
@@ -56,12 +70,12 @@ export default function AddArticleListCopy() {
         OutsideDiameterNominal: "",
         OutsideDiameterMin: "",
         OutsideDiameterMax: "",
-        FlatCrushNominal: "",
-        FlatCrushMin: "",
-        FlatCrushMax: "",
-        H20Nominal: "",
-        H20Min: "",
-        H20Max: "",
+        ResistanceNominal: "",
+        ResistanceMin: "",
+        ResistanceMax: "",
+        HumidityNominal: "",
+        HumidityMin: "",
+        HumidityMax: "",
         RadialNominal:"",
         RadialMin:"",
         RadialMax:"",
@@ -72,112 +86,35 @@ export default function AddArticleListCopy() {
   const validationSchema = Yup.object({
     rows: Yup.array().of(
       Yup.object().shape({
-        article_name: Yup.string().required("Product Name is required"),
-        customer_id: Yup.string().required("Customer Name is required"),
-        NumberControl: Yup.number().required("Number of Control is required"),
+        designation_article: Yup.string().required("Product Name is required"),
+        article_name: Yup.string().required("Client is required"),
+        NumberControl: Yup.string().required("Number of Control is required"),
       })
     ),
   });
   const AddArticleMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await fetch("/api/v1/create_article", {
+      const response = await fetch("/api/v1/create_article_prod", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(data),
       });
-      return response.json();
-    },
-    onError: (error) => {
-      toast.error("Fialed to add Article");
-      console.error(error);
-    },
-    onSuccess: (data) => {
-      toast.success("Article Added Successfully");
-      navigator.push("/dashboard/article_management");
-      console.log("article on success data", data.id);
-    },
-    onMutate: (data) => {
-      return data;
-    },
-  });
-
-  const AddNominalMutation = useMutation({
-    mutationFn: async (data: any) => {
-      console.log("nominal data",data);
-      const response = await fetch("/api/v1/create_article_nominal", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-      return response.json();
-    },
-    onError: (error) => {
-      toast.error("Fialed to add Article Nominal");
-      console.error(error);
-    },
-    onSuccess: (data) => {
-      if (data?.id) {
-        setNominalId(data.id);
-        toast.success("Article Nominal Added Successfully");
-        // navigator.push("/dashboard/article_management");
-        console.log("Nominal ID on success:", data.id);
-      } else {
-        console.warn("No ID returned in the response:", data);
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.error || "Failed to add article");
       }
-    },
-    onMutate: (data) => {
-      return data;
-    },
-  });
-  const AddMinMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await fetch("/api/v1/create_article_min", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-      return response.json();
+      return result;
     },
     onError: (error) => {
-      toast.error("Fialed to add Article Min");
+      const message =
+        error instanceof Error ? error.message : "Failed to add Article";
+      toast.error(message);
       console.error(error);
     },
-    onSuccess: (data) => {
-      toast.success("Article Min Added Successfully");
-      // navigator.push("/dashboard/article_management");
-      setMinId(data.id);
-      console.log("min on success data", data.id);
-    },
-    onMutate: (data) => {
-      return data;
-    },
-  });
-  const AddMaxMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await fetch("/api/v1/create_article_max", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-      return response.json();
-    },
-    onError: (error) => {
-      toast.error("Fialed to add Article Max");
-      console.error(error);
-    },
-    onSuccess: (data) => {
-      toast.success("Article Max Added Successfully");
-      // navigator.push("/dashboard/article_management");
-      setMaxId(data.id);
-      console.log("max on success data", data.id);
+    onSuccess: () => {
+      // Toast and navigation are handled in onSubmit after all rows are processed
     },
     onMutate: (data) => {
       return data;
@@ -185,44 +122,24 @@ export default function AddArticleListCopy() {
   });
 
   // console.log("orders data  ",measurementsData);
-  console.log("max id", maxId + "min id", minId + "nominal id", nominalId);
-  const [page, setPage] = useState(1);
-  const searchInput = useRef<HTMLInputElement>(null);
-  const [limit] = useState(10);
-  const [search, setSearch] = useState("");
-
-  const [asssing_id, setAssign_id] = useState<string | null>(null);
-  const { data: customerData } = useQuery({
-    queryKey: ["get_customer", page, search, limit],
-    queryFn: async () => {
-      console.log("Fetching Data with:", { page, search, limit }); // Debug
-      const response = await fetch(`/api/v1/get_customer`, {
-        method: "GET",
-        headers: {
-          Accept: "*/*",
-          "User-Agent": "Thunder Client (https://www.thunderclient.com)",
-        },
-        redirect: "follow",
-      });
+  const fetchOfidForArticle = async (articleId: string) => {
+    if (!articleId) return null;
+    try {
+      const response = await fetch(
+        `/api/v1/get_ofid_by_article?article=${encodeURIComponent(articleId)}`
+      );
+      if (!response.ok) return null;
       const result = await response.json();
-
-      console.log("API Response:", result); // Debug Response
-      if (response.ok) {
-        return result;
-      } else {
-        throw new Error("Something went wrong while fetching customer list.");
+      if (result?.status === "SINGLE_MATCH") return result.ofid || null;
+      if (Array.isArray(result?.ofids) && result.ofids.length > 0) {
+        return result.ofids[0];
       }
-    },
-    retry: 1,
-  });
-
-  console.log("Customer Data:", customerData);
-
-  const customerOptions =
-    customerData?.data?.map((customer: any) => ({
-      value: customer.id,
-      label: `${customer.company_name}`,
-    })) || [];
+      return null;
+    } catch (error) {
+      console.error("Failed to fetch OFID:", error);
+      return null;
+    }
+  };
 
   return (
     <div className="flex flex-col w-full px-6 py-4 text-black">
@@ -231,59 +148,53 @@ export default function AddArticleListCopy() {
           initialValues={initialValues}
           validationSchema={validationSchema}
           onSubmit={async (values) => {
+          let successCount = 0;
           for (const row of values.rows) {
             try {
-              const [nominal, min, max] = await Promise.all([
-                AddNominalMutation.mutateAsync({
-                  length: row.LengthNominal,
-                  inside_diameter: row.InsideDiameterNominal,
-                  outside_diameter: row.OutsideDiameterNominal,
-                  flat_crush: row.FlatCrushNominal,
-                  h20: row.H20Nominal,
-                  radial:row.RadialNominal,
-                }),
-                
-                AddMinMutation.mutateAsync({
-                  length: row.LengthMin,
-                  inside_diameter: row.InsideDiameterMin,
-                  outside_diameter: row.OutsideDiameterMin,
-                  flat_crush: row.FlatCrushMin,
-                  h20: row.H20Min,
-                  radial:row.RadialMin,
-                }),
-                AddMaxMutation.mutateAsync({
-                  length: row.LengthMax,
-                  inside_diameter: row.InsideDiameterMax,
-                  outside_diameter: row.OutsideDiameterMax,
-                  flat_crush: row.FlatCrushMax,
-                  h20: row.H20Max,
-                  radial:row.RadialMax,
-                }),
-              ]);
-      
-              if (!nominal.id || !min.id || !max.id) {
-                throw new Error("Missing required IDs");
-                
-              }
-      
+              const length = normalizeDecimalInput(row.LengthNominal);
+              const lengthMin = normalizeDecimalInput(row.LengthMin);
+              const lengthMax = normalizeDecimalInput(row.LengthMax);
+              const insideNominal = normalizeDecimalInput(row.InsideDiameterNominal);
+              const insideMin = normalizeDecimalInput(row.InsideDiameterMin);
+              const insideMax = normalizeDecimalInput(row.InsideDiameterMax);
+              const outsideNominal = normalizeDecimalInput(row.OutsideDiameterNominal);
+              const outsideMin = normalizeDecimalInput(row.OutsideDiameterMin);
+              const outsideMax = normalizeDecimalInput(row.OutsideDiameterMax);
+              const resistanceMin = normalizeFlatCrushForSave(row.ResistanceMin);
+              const resistanceMax = normalizeFlatCrushForSave(row.ResistanceMax);
+              const humidityMin = normalizeDecimalInput(row.HumidityMin);
+              const humidityMax = normalizeDecimalInput(row.HumidityMax);
               await AddArticleMutation.mutateAsync({
-                id_number:row.id_number,
+                article: row.id_number,
+                designation_article: row.designation_article,
                 article_name: row.article_name,
-                customer_id: row.customer_id,
-                article_nominal: nominal.id,
-                article_min: min.id,
-                article_max: max.id,
-                number_control: row.NumberControl,
+                length,
+                inside_diameter: insideNominal,
+                outside_diameter: outsideNominal,
+                length_min: lengthMin,
+                length_max: lengthMax,
+                inside_diameter_min: insideMin,
+                inside_diameter_max: insideMax,
+                outside_diameter_min: outsideMin,
+                outside_diameter_max: outsideMax,
+                resistance_min: resistanceMin,
+                resistance_max: resistanceMax,
+                humidty_min: humidityMin,
+                humidity_max: humidityMax,
               });
-              // navigator.push("/dashboard/article_management");
-              
+              successCount += 1;
             } catch (error) {
               toast.error("Failed to add article");
               console.error(error);
             }
-            alert(
-              `Nominal ID: ${nominalId}, Min ID: ${minId}, Max ID: ${maxId}`);
-          
+          }
+          if (successCount > 0) {
+            toast.success(
+              successCount === 1
+                ? "Article added successfully"
+                : `${successCount} articles added successfully`
+            );
+            navigator.push("/dashboard/article_management");
           }
         }}
       >
@@ -304,7 +215,7 @@ export default function AddArticleListCopy() {
                               <Field
                                 name={`rows.${index}.id_number`}
                                 type="text"
-                                placeholder="Enter ID Number"
+                                placeholder="Enter ID Number (leave blank to auto-generate)"
                                 className={`input input-bordered w-full
                                  ${
                                    typeof errors.rows?.[index] === "object" &&
@@ -314,6 +225,12 @@ export default function AddArticleListCopy() {
                                      : ""
                                  } 
                                 `}
+                                onBlur={async (event: React.FocusEvent<HTMLInputElement>) => {
+                                  const ofid = await fetchOfidForArticle(event.target.value);
+                                  if (ofid) {
+                                    setFieldValue(`rows.${index}.NumberControl`, ofid);
+                                  }
+                                }}
                               />
                               <ErrorMessage
                                 name={`rows.${index}.id_number`}
@@ -324,47 +241,52 @@ export default function AddArticleListCopy() {
                             <div className="flex flex-col gap-2">
                               <label className="text-sm font-semibold text-gray-700">Product Name</label>
                               <Field
-                                name={`rows.${index}.article_name`}
+                                name={`rows.${index}.designation_article`}
                                 type="text"
                                 placeholder="Enter Product Name"
                                 className={`input input-bordered w-full
                                  ${
                                    typeof errors.rows?.[index] === "object" &&
-                                   errors.rows?.[index]?.article_name &&
-                                   touched.rows?.[index]?.article_name
+                                   errors.rows?.[index]?.designation_article &&
+                                   touched.rows?.[index]?.designation_article
                                      ? "border-red-500"
                                      : ""
                                  } 
                                 `}
                               />
                               <ErrorMessage
-                                name={`rows.${index}.article_name`}
+                                name={`rows.${index}.designation_article`}
                                 component="div"
                                 className="text-red-500 text-xs"
                               />
                             </div>
                             <div className="flex flex-col gap-2">
-                              <label className="text-sm font-semibold text-gray-700">Customer Name</label>
-                              <Select
-                                name={`rows.${index}.customer_id`}
-                                placeholder="Select Customer"
-                                options={customerOptions}
-                                onChange={(option: any) => {
-                                  setFieldValue(
-                                    `rows.${index}.customer_id`,
-                                    option.value
-                                  );
-                                }}
-                                className={`text-sm mt-1 bg-white w-full${
+                              <label className="text-sm font-semibold text-gray-700">Client</label>
+                              <SuggestiveSearchInput
+                                value={row.article_name}
+                                onChange={(next) =>
+                                  setFieldValue(`rows.${index}.article_name`, next)
+                                }
+                                onSearch={() => {}}
+                                placeholder="Select Client"
+                                suggestionScope="clients"
+                                strict
+                                inputClassName={`input input-bordered w-full ${
                                   typeof errors.rows?.[index] === "object" &&
-                                  errors.rows?.[index]?.customer_id &&
-                                  touched.rows?.[index]?.customer_id
+                                  errors.rows?.[index]?.article_name &&
+                                  touched.rows?.[index]?.article_name
                                     ? "border-red-500"
                                     : ""
                                 }`}
+                                onInvalidSelection={(nextValue) => {
+                                  if (nextValue.trim()) {
+                                    toast.error("Select a client from the list.");
+                                    setFieldValue(`rows.${index}.article_name`, "");
+                                  }
+                                }}
                               />
                               <ErrorMessage
-                                name={`rows.${index}.customer_id`}
+                                name={`rows.${index}.article_name`}
                                 component="div"
                                 className="text-red-500 text-xs"
                               />
@@ -373,7 +295,7 @@ export default function AddArticleListCopy() {
                               <label className="text-sm font-semibold text-gray-700">Number of Control</label>
                               <Field
                                 name={`rows.${index}.NumberControl`}
-                                type="number"
+                                type="text"
                                 placeholder="Enter Number Of Control"
                                 className={`input input-bordered w-full ${
                                   typeof errors.rows?.[index] === "object" &&
@@ -412,21 +334,27 @@ export default function AddArticleListCopy() {
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.LengthNominal`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.LengthMin`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.LengthMax`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
@@ -436,21 +364,27 @@ export default function AddArticleListCopy() {
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.InsideDiameterNominal`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.InsideDiameterMin`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.InsideDiameterMax`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
@@ -460,21 +394,27 @@ export default function AddArticleListCopy() {
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.OutsideDiameterNominal`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.OutsideDiameterMin`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.OutsideDiameterMax`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
@@ -482,47 +422,89 @@ export default function AddArticleListCopy() {
                                   <tr className="hover:bg-blue-50/50 transition-colors duration-200">
                                     <td className="px-4 py-3 text-xs font-semibold text-gray-700 whitespace-nowrap bg-gray-50">Flat Crush</td>
                                     <td className="px-4 py-3">
-                                      <Field
-                                        name={`rows.${index}.FlatCrushNominal`}
-                                        type="number"
-                                        className="input input-bordered w-full text-xs"
-                                      />
+                                      <Field name={`rows.${index}.ResistanceNominal`}>
+                                        {({ field }: { field: any }) => (
+                                          <input
+                                            {...field}
+                                            type="text"
+                                            inputMode="decimal"
+                                            pattern="[0-9.,-]*"
+                                            className="input input-bordered w-full text-xs"
+                                            onBlur={(event) => {
+                                              field.onBlur(event);
+                                              const normalized = normalizeFlatCrushForDisplay(event.target.value);
+                                              if (normalized === null) return;
+                                              setFieldValue(field.name, normalized);
+                                            }}
+                                          />
+                                        )}
+                                      </Field>
                                     </td>
                                     <td className="px-4 py-3">
-                                      <Field
-                                        name={`rows.${index}.FlatCrushMin`}
-                                        type="number"
-                                        className="input input-bordered w-full text-xs"
-                                      />
+                                      <Field name={`rows.${index}.ResistanceMin`}>
+                                        {({ field }: { field: any }) => (
+                                          <input
+                                            {...field}
+                                            type="text"
+                                            inputMode="decimal"
+                                            pattern="[0-9.,-]*"
+                                            className="input input-bordered w-full text-xs"
+                                            onBlur={(event) => {
+                                              field.onBlur(event);
+                                              const normalized = normalizeFlatCrushForDisplay(event.target.value);
+                                              if (normalized === null) return;
+                                              setFieldValue(field.name, normalized);
+                                            }}
+                                          />
+                                        )}
+                                      </Field>
                                     </td>
                                     <td className="px-4 py-3">
-                                      <Field
-                                        name={`rows.${index}.FlatCrushMax`}
-                                        type="number"
-                                        className="input input-bordered w-full text-xs"
-                                      />
+                                      <Field name={`rows.${index}.ResistanceMax`}>
+                                        {({ field }: { field: any }) => (
+                                          <input
+                                            {...field}
+                                            type="text"
+                                            inputMode="decimal"
+                                            pattern="[0-9.,-]*"
+                                            className="input input-bordered w-full text-xs"
+                                            onBlur={(event) => {
+                                              field.onBlur(event);
+                                              const normalized = normalizeFlatCrushForDisplay(event.target.value);
+                                              if (normalized === null) return;
+                                              setFieldValue(field.name, normalized);
+                                            }}
+                                          />
+                                        )}
+                                      </Field>
                                     </td>
                                   </tr>
                                   <tr className="hover:bg-blue-50/50 transition-colors duration-200">
                                     <td className="px-4 py-3 text-xs font-semibold text-gray-700 whitespace-nowrap bg-gray-50">H₂O</td>
                                     <td className="px-4 py-3">
                                       <Field
-                                        name={`rows.${index}.H20Nominal`}
-                                        type="number"
+                                        name={`rows.${index}.HumidityNominal`}
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
                                     <td className="px-4 py-3">
                                       <Field
-                                        name={`rows.${index}.H20Min`}
-                                        type="number"
+                                        name={`rows.${index}.HumidityMin`}
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
                                     <td className="px-4 py-3">
                                       <Field
-                                        name={`rows.${index}.H20Max`}
-                                        type="number"
+                                        name={`rows.${index}.HumidityMax`}
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
@@ -532,21 +514,27 @@ export default function AddArticleListCopy() {
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.RadialNominal`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.RadialMin`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>
                                     <td className="px-4 py-3">
                                       <Field
                                         name={`rows.${index}.RadialMax`}
-                                        type="number"
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,-]*"
                                         className="input input-bordered w-full text-xs"
                                       />
                                     </td>

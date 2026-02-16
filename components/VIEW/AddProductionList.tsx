@@ -14,7 +14,7 @@ import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
 
 export default function AddProductionList() {
   const navigator = useRouter();
-  useEscapeNavigation("/dashboard/production_management");
+  useEscapeNavigation("/dashboard/statistical_analysis");
   const [assignId, setAssignId] = useState("");
   const [page, setPage] = useState(1);
   const searchInput = useRef<HTMLInputElement>(null);
@@ -81,7 +81,7 @@ export default function AddProductionList() {
     },
     onSuccess: (data) => {
       toast.success("Production Added Successfully");
-      navigator.push("/dashboard/production_management");
+      navigator.push("/dashboard/statistical_analysis");
     },
   });
 
@@ -89,11 +89,11 @@ export default function AddProductionList() {
     <div className="flex flex-col w-11/12 mx-auto text-black">
       <div className="breadcrumbs my-4 text-lg text-slate-600 font-semibold">
         <ul>
-          <li>
-            <Link href="/dashboard/production_management">
-              Production Management
-            </Link>
-          </li>
+        <li>
+          <Link href="/dashboard/statistical_analysis">
+            Statistical Analysis
+          </Link>
+        </li>
           <li>
             <span>Add Production</span>
           </li>
@@ -142,6 +142,7 @@ export default function AddProductionList() {
                     <label className="label">Entry Date Time</label>
                     <Field
                       type="date"
+                      lang="en-GB"
                       name="entry_date_time"
                       placeholder="Entry Date Time"
                       className="input input-bordered"
@@ -153,6 +154,7 @@ export default function AddProductionList() {
                     <label className="label">Exit Date Time</label>
                     <Field
                       type="date"
+                      lang="en-GB"
                       name="exit_date_time"
                       placeholder="Exit Date Time"
                       className="input input-bordered"
@@ -180,7 +182,7 @@ export default function AddProductionList() {
               </button>
               <Link
                 className="btn btn-accent"
-                href="/dashboard/production_management"
+                href="/dashboard/statistical_analysis"
               >
                 BACK
               </Link>

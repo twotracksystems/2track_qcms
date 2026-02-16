@@ -8,9 +8,10 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import * as Yup from "yup";
 import { FormInput, FormSearchableSelect, FormSelect } from "../UI/FormInput";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import Select from "react-select";
+import AsyncSelect from "react-select/async";
 import { useEscapeNavigation } from "@/utils/hooks/useEscapeNavigation";
 export default function AddOrderList(params:any) {
   
@@ -27,13 +28,14 @@ const supabase = createClient();
        };
        
        fetchUserEmail();
-     }, []);
+     }, [supabase.auth]);
        console.log("UserRole:", UserRole);
   const [initialValues, setInitialValues] = useState({
     Id: "",
     // product_name: "",
     CustomerName: "",
     ArticleName: "",
+    ArticleNameLabel: "",
     PalleteCount: "",
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -45,28 +47,39 @@ const supabase = createClient();
     isError,
     error: userError,
   } = useQuery({
-    queryKey: ["customer", id],
+    queryKey: ["order_by_id", id],
     queryFn: async () => {
-      const response = await fetch(`/api/v1/getoneorder/?id=${id}`);
+      const response = await fetch(`/api/v1/get_order_by_id?id=${id}`);
       if (!response.ok) {
-        throw new Error(`Failed to fetch user data: ${response.status}`);
+        throw new Error(`Failed to fetch order data: ${response.status}`);
       }
-      return response.json(); // Expecting an array
+      return response.json(); // Expecting an array (tbl_prod order)
     },
     enabled: !!id, // Only fetch data if id exists
   });
-  console.log("Gatherd data:",userData);
+  console.log("Gatherd data:", userData);
   useEffect(() => {
     if (isSuccess && userData && userData.length > 0) {
-      const user = userData[0]; // Get the first user object
+      const user = userData[0]; // Get the first order object (from tbl_prod)
+      const articleId = user.article_id;
       setInitialValues((prev) => ({
         ...prev,
-        Id: user.order_fabrication_control || "",
-        // product_name: user.product_name || "",
-        CustomerName: user.customer_id || "",
-        ArticleName: user.article_id || "",
-        PalleteCount: user.pallete_count ||"0",
+        Id: user.order_fabrication_control != null ? String(user.order_fabrication_control) : "",
+        CustomerName: user.customer_id ?? "",
+        ArticleName: articleId ?? "",
+        ArticleNameLabel: "",
+        PalleteCount: user.pallete_count != null ? String(user.pallete_count) : "0",
       }));
+      if (articleId) {
+        fetch(`/api/v1/getonearticleprod?id=${articleId}`)
+          .then((r) => r.json())
+          .then((data: any[]) => {
+            if (data?.length && data[0]?.article != null) {
+              setInitialValues((prev) => ({ ...prev, ArticleNameLabel: String(data[0].article) }));
+            }
+          })
+          .catch(() => {});
+      }
     }
   }, [isSuccess, userData]);
 
@@ -146,37 +159,35 @@ const supabase = createClient();
     label: `${customer.company_name}`,
   })) || [];
 console.log("Customer Data:",customerOptions);
-  const {
-    data: articleData,
-    isFetching: isFetchingArticles,
-    isError: isErrorArticles,
-  } = useQuery({
-    queryKey: ["get_article", page, search, limit],
-    queryFn: async () => {
-      const response = await fetch(
-        `/api/v1/getall_article?page=${page}&search=${search}&limit=${limit}`,
-        {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-          },
+  const articleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadArticleOptions = useCallback(
+    (inputValue: string): Promise<{ value: string; label: string }[]> =>
+      new Promise((resolve) => {
+        if (articleDebounceRef.current) {
+          clearTimeout(articleDebounceRef.current);
         }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch customers");
-      }
-
-      return response.json();
-    },
-    staleTime: 5000, // Avoid flickering on refetch
-    retry: 2,
-  });
-
-  const articleOptions = articleData?.data?.map((article: any) => ({
-    value: article.id,
-    label: `${article.id_number}`,
-  })) || [];
+        articleDebounceRef.current = setTimeout(async () => {
+          const searchTerm = (inputValue || "").trim();
+          const url = `/api/v1/get_article_prod_options?search=${encodeURIComponent(searchTerm)}&limit=50`;
+          try {
+            const res = await fetch(url, { method: "GET", headers: { Accept: "application/json" } });
+            if (!res.ok) {
+              resolve([]);
+              return;
+            }
+            const json = await res.json();
+            const options = (json?.data || []).map((row: { id: number; article: string | number }) => ({
+              value: String(row.id),
+              label: String(row.article ?? ""),
+            }));
+            resolve(options);
+          } catch {
+            resolve([]);
+          }
+        }, 300);
+      }),
+    []
+  );
 
   const [isRemoveModalOpen, setIsRemoveModalOpen] = useState(false);
 
@@ -229,7 +240,7 @@ const removeCustomerMutation = useMutation({
             updateUserMutation.mutate(e);
           }}
         >
-          {({ errors, touched, values }) => (
+          {({ errors, touched, values, setValues }) => (
             <Form>
               <div className="flex flex-col gap-y-6">
                 <div className="bg-white rounded-2xl shadow-lg border border-blue-200/30 p-8">
@@ -239,11 +250,11 @@ const removeCustomerMutation = useMutation({
                       <FormInput
                         tooltip="Enter the order ID"
                         name="Id"
-                        type="number"
+                        type="text"
                         placeholder="Order ID"
                         label="Order ID"
-                        errors={error ? error : ""}
-                        touched="true"
+                        errors={errors.Id}
+                        touched={touched.Id ? "true" : ""}
                       />
                     </div>
                     <div>
@@ -261,15 +272,41 @@ const removeCustomerMutation = useMutation({
                     </div>
                     <div>
                       <label className="form-control w-full">
-                        <FormSearchableSelect
-                          name="ArticleName"
-                          label="ID Article"
-                          placeholder="Choose a product"
-                          tooltip="Select the product name from dropdown"
-                          errors={errors.ArticleName}
-                          touched={touched.ArticleName ? "true" : ""}
-                          options={articleOptions}
+                        <div className="label">
+                          <span className="label-text font-bold gap-x-2 flex flex-row">
+                            ID Article
+                            <span className="tooltip tooltip-right" data-tip="Select the ID Article from dropdown (search by article number or designation)">
+                              <CircleHelp className="my-auto" size={20} strokeWidth={0.75} />
+                            </span>
+                          </span>
+                        </div>
+                        <AsyncSelect
+                          instanceId="edit-order-article-select"
+                          loadOptions={loadArticleOptions}
+                          defaultOptions
+                          cacheOptions
+                          value={
+                            values.ArticleName
+                              ? {
+                                  value: values.ArticleName,
+                                  label: values.ArticleNameLabel || values.ArticleName,
+                                }
+                              : null
+                          }
+                          onChange={(selected: { value: string; label: string } | null) => {
+                            setValues((prev: any) => ({
+                              ...prev,
+                              ArticleName: selected ? selected.value : "",
+                              ArticleNameLabel: selected ? selected.label : "",
+                            }));
+                          }}
+                          placeholder="Choose a product (type to search)"
+                          className="text-lg bg-white select-bordered mx-auto w-full"
+                          classNamePrefix="react-select"
                         />
+                        {errors.ArticleName && touched.ArticleName ? (
+                          <span className="text-error flex flex-row text-sm mt-1">{errors.ArticleName}</span>
+                        ) : null}
                       </label>
                     </div>
 

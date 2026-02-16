@@ -1,4 +1,5 @@
 import { createClient, roleExtractor } from "@/utils/supabase/server";
+import { normalizeDecimalInput } from "@/utils/parseDecimal";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function PUT(req: NextRequest) {
@@ -29,16 +30,23 @@ export async function PUT(req: NextRequest) {
     //   );
     // }
 
+    const lengthValue = normalizeDecimalInput(length);
+    const insideDiameterValue = normalizeDecimalInput(inside_diameter);
+    const outsideDiameterValue = normalizeDecimalInput(outside_diameter);
+    const flatCrushValue = normalizeDecimalInput(flat_crush);
+    const h20Value = normalizeDecimalInput(h20);
+    const radialValue = normalizeDecimalInput(radial);
+
     // Update user details in the database
     const { data: userUpdateData, error: userUpdateError } = await supabase
       .from("tbl_article_min")
       .update({
-        length,
-        inside_diameter,
-        outside_diameter,
-        flat_crush,
-        h20,
-        radial,
+        length: lengthValue ?? null,
+        inside_diameter: insideDiameterValue ?? null,
+        outside_diameter: outsideDiameterValue ?? null,
+        flat_crush: flatCrushValue ?? null,
+        h20: h20Value ?? null,
+        radial: radialValue ?? null,
         updated_at: new Date(),
       })
       .eq("id", id);

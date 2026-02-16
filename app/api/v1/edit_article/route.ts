@@ -1,4 +1,5 @@
 import { createClient, roleExtractor } from "@/utils/supabase/server";
+import { normalizeDecimalInput } from "@/utils/parseDecimal";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function PUT(req: NextRequest) {
@@ -23,6 +24,8 @@ export async function PUT(req: NextRequest) {
     //   );
     // }
 
+    const numberControlValue = normalizeDecimalInput(number_control);
+
     // Update user details in the database
     const { data: userUpdateData, error: userUpdateError } = await supabase
       .from("tbl_article")
@@ -33,7 +36,7 @@ export async function PUT(req: NextRequest) {
         article_nominal,
         article_min,
         article_max,
-        number_control,
+        number_control: numberControlValue ?? null,
         updated_at: new Date(),
       })
       .eq("id", id);

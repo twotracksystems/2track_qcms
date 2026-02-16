@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
+import { normalizeDecimalInput } from "@/utils/parseDecimal";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -19,17 +20,24 @@ export async function POST(req: NextRequest) {
     // Create Supabase client
     const supabase = await createClient();
 
+    const lengthValue = normalizeDecimalInput(length);
+    const insideDiameterValue = normalizeDecimalInput(inside_diameter);
+    const outsideDiameterValue = normalizeDecimalInput(outside_diameter);
+    const flatCrushValue = normalizeDecimalInput(flat_crush);
+    const h20Value = normalizeDecimalInput(h20);
+    const radialValue = normalizeDecimalInput(radial);
+
     // Insert data into tbl_orders_form
     const { data: insertResult, error } = await supabase
       .from("tbl_article_nominal")
       .insert([
         {
-          length: length || null,
-          inside_diameter: inside_diameter || null,
-          outside_diameter: outside_diameter || null,
-          flat_crush: flat_crush || null,
-          h20: h20 || null,
-          radial:radial||null,
+          length: lengthValue ?? null,
+          inside_diameter: insideDiameterValue ?? null,
+          outside_diameter: outsideDiameterValue ?? null,
+          flat_crush: flatCrushValue ?? null,
+          h20: h20Value ?? null,
+          radial: radialValue ?? null,
           user_id: user_id,
           is_exist: true, // Always true
         },

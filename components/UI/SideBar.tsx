@@ -15,6 +15,7 @@ import {
   LogIn,
   ChevronLeft,
   Menu,
+  Package,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
@@ -73,7 +74,7 @@ export default function Sidebar({
       "/dashboard/customer_management": "Customer Management",
       "/dashboard/article_management": "Article Creation",
       "/dashboard/order_management": "Order Fabrication Management",
-      "/dashboard/production_management": "Production Management",
+      "/dashboard/statistical_analysis": "Statistical Analysis",
       "/dashboard/measurement_management": "Measurement Management",
       "/dashboard/laboratory_management": "Laboratory Management",
     };
@@ -186,6 +187,21 @@ export default function Sidebar({
                 >
                   <FolderKanban className="h-5 w-5" />
                   {!isCollapsed && <span>Order Fabrication Management</span>}
+                </Link>
+              </li>
+
+              <li>
+                <Link
+                  href="/dashboard/statistical_analysis"
+                  className={`${linkBase} ${
+                    query == "/dashboard/statistical_analysis"
+                      ? "bg-gradient-to-r from-blue-700 to-blue-600 text-white shadow-md border border-white/20"
+                      : "text-blue-100 hover:bg-white/10 hover:shadow-sm border border-transparent"
+                  } ${isCollapsed ? "justify-center px-0" : ""}`}
+                  title={isCollapsed ? "Statistical Analysis" : undefined}
+                >
+                  <Package className="h-5 w-5" />
+                  {!isCollapsed && <span>Statistical Analysis</span>}
                 </Link>
               </li>
             </ul>
