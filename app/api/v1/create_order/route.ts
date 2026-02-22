@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { createClient, requireNotViewer } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -17,8 +17,14 @@ export async function POST(req: NextRequest) {
     } = data;
     console.log("Received data:", data);
 
-    // Create Supabase client
     const supabase = await createClient();
+    const viewerCheck = await requireNotViewer(supabase);
+    if (!viewerCheck.allowed) {
+      return NextResponse.json(
+        { error: "Viewers cannot modify data." },
+        { status: 403 }
+      );
+    }
 
     if (!order_fabrication_control) {
       return NextResponse.json(

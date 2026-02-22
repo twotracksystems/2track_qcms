@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import Link from "next/link";
 
-export default function LoginView() {
+export default function EmailConfirmationView() {
   const supabase = createClient();
   const route = useRouter();
 
@@ -23,7 +23,7 @@ export default function LoginView() {
   }, []);
 
   const handleChange = (value: string, index: number) => {
-    if (!/^\d*$/.test(value)) return; // Allow only numeric input
+    if (!/^\d*$/.test(value)) return;
     const newCode = [...code];
     newCode[index] = value;
     setCode(newCode);
@@ -47,40 +47,36 @@ export default function LoginView() {
 
   const verifycodeMutation = useMutation({
     mutationFn: async (values: { email: string; code: string }) => {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: values.email,
+        token: values.code,
+        type: "email",
+      });
+      if (error) throw error;
+
+      // Session is now established -- mark user as verified in tbl_users
       const response = await fetch("/api/emailconfirmation", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(values),
       });
-
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData?.message || "An error occurred while verifying code");
+        throw new Error(errorData?.error || "Failed to update verification status");
       }
 
-      return response.json();
+      return data;
     },
     onError: (error) => {
       console.log("Verify code error:", error);
       toast.error("Invalid code or code expired");
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       toast.success("Code verified successfully");
       route.push("/dashboard");
     },
   });
 
   return (
-    <div
-      className="w-full h-screen flex min-h-screen text-black bg-cover bg-center bg-no-repeat"
-      style={{
-        backgroundImage: "url('/Img/4.png')",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }}
-    >
+    <div className="w-full h-screen flex min-h-screen text-black bg-cover bg-center bg-no-repeat bg-gradient-to-br from-blue-900 from-100% via-blue-700 via-100% to-blue-900 to-100%">
       <div className="place-content-center bg-transparent card lg:card-side bg-base-100 inline my-auto mx-auto shadow-xl">
         <div className="w-full place-content-center inline bg-transparent">
           <Image src="/Img/corex1.png" className="" alt="logo" width={400} height={429} />
@@ -101,9 +97,8 @@ export default function LoginView() {
                 .length(6, "Code must be 6 digits.")
                 .required("Code is required."),
             })}
-            onSubmit={(values) => {
+            onSubmit={() => {
               verifycodeMutation.mutate({ email: email || "", code: code.join("") });
-              // alert(JSON.stringify(values, null, 2));
             }}
           >
             {({ errors, touched }) => (
@@ -134,17 +129,19 @@ export default function LoginView() {
                     type="submit"
                     className="btn w-full bg-white bg-gradient-to-r btn-primary"
                   >
-                    {verifycodeMutation.status === "pending" ? (
+                    {verifycodeMutation.isPending ? (
                       <div className="flex justify-center items-center">
                         <div className="animate-spin text-slate-700 rounded-full h-5 w-5 border-b-2 border-white"></div>{" "}
-                        Authenticating...
+                        Verifying...
                       </div>
                     ) : (
                       "Verify Code"
                     )}
                   </button>
                 </div>
-                <Link href="/login">Resend Code</Link>
+                <Link href="/verify_email" className="text-center text-white hover:underline">
+                  Resend Code
+                </Link>
               </Form>
             )}
           </Formik>

@@ -1,4 +1,4 @@
-import { createClient, roleExtractor } from "@/utils/supabase/server";
+import { createClient, requireNotViewer } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -9,19 +9,15 @@ export async function POST(req: NextRequest) {
 
 
 
-    // Create Supabase client
     const supabase = await createClient();
+    const viewerCheck = await requireNotViewer(supabase);
+    if (!viewerCheck.allowed) {
+      return NextResponse.json(
+        { error: "Viewers cannot modify data." },
+        { status: 403 }
+      );
+    }
 
-    // // Verify user role
-    // const current_role = await roleExtractor(supabase);
-    // if (current_role !== "Super Admin") {
-    //   return NextResponse.json(
-    //     { error: "No permission to perform this action" },
-    //     { status: 401 }
-    //   );
-    // }
-
-  
     // Insert data into tbl_customer
     const { data: insertResult, error: insertError } = await supabase
       .from("tbl_customer")

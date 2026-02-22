@@ -30,8 +30,18 @@ export async function createClient() {
 }
 
 export async function roleExtractor(supabase: SupabaseClient) {
-  const { data: userRole, error: userRoleError } =
-    await supabase.auth.getUser();
+  const { data: userRole } = await supabase.auth.getUser();
+  return userRole.user?.user_metadata?.role;
+}
 
-  return userRole.user?.user_metadata.role;
+/** Use in mutating API routes. Returns 403 if current user is Viewer. */
+export async function requireNotViewer(supabase: SupabaseClient): Promise<
+  | { allowed: true; role: string | undefined }
+  | { allowed: false; role: string }
+> {
+  const role = await roleExtractor(supabase);
+  if (role === "Viewer") {
+    return { allowed: false, role: "Viewer" };
+  }
+  return { allowed: true, role };
 }

@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { createClient, requireNotViewer } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
 /**
@@ -22,6 +22,13 @@ export async function PUT(req: NextRequest) {
     } = body;
 
     const supabase = await createClient();
+    const viewerCheck = await requireNotViewer(supabase);
+    if (!viewerCheck.allowed) {
+      return NextResponse.json(
+        { error: "Viewers cannot modify data." },
+        { status: 403 }
+      );
+    }
 
     // Resolve customer_id -> client (company_name) for tbl_prod
     let client: string | null = null;

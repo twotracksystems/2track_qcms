@@ -1,51 +1,35 @@
 import { createClient } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function POST(req: NextRequest) {  // Remove 'res' parameter
-  const { email, code } = await req.json();
-
+export async function POST(req: NextRequest) {
   const supabase = await createClient();
-  if (!email || !code) {
-    return NextResponse.json(
-      { error: "Email and code are required." },
-      { status: 400 }
-    );
-  }
 
-  const { data, error } = await supabase
-    .from("tbl_users")
-    .select("*")
-    .eq("email", email)
-    .eq("code", code) // Assuming you store the code in a field like "verification_code"
-    .single();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-  if (error || !data) {
-    console.log("Error fetching data:", error);
+  if (authError || !user) {
     return NextResponse.json(
-      { error: "Invalid email or code." },
+      { error: "Unauthorized" },
       { status: 401 }
     );
   }
-  const codeExpiration = new Date(data.code_expiration);
-  const now = new Date();
-  
-  if (now > codeExpiration) {
+
+  const { error } = await supabase
+    .from("tbl_users")
+    .update({ is_verified: true })
+    .eq("uuid", user.id);
+
+  if (error) {
     return NextResponse.json(
-      { error: "Code expired." },
-      { status: 402 }
+      { error: error.message },
+      { status: 500 }
     );
   }
 
-  const updateuser = await supabase
-      .from("tbl_users")
-      .update({ is_verified: true })
-      .eq("email", email)
-      .eq("code", code)
-      .single();
-
-  // If everything is valid
   return NextResponse.json(
-    { message: "Verification successful.", user: data },
+    { message: "Verification successful." },
     { status: 200 }
   );
 }

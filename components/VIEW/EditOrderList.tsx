@@ -221,17 +221,7 @@ const removeCustomerMutation = useMutation({
   return (
     <div className="flex flex-col w-full px-6 py-4 text-black">
       <div className="flex-1 flex flex-col gap-y-3 h-full min-w-0">
-        <div className="flex flex-row justify-end items-center mb-4">
-          {UserRole === "Super Admin" && (
-            <button
-              type="button"
-              className="px-4 py-2 rounded-lg bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
-              onClick={() => setIsRemoveModalOpen(true)}
-            >
-              <Trash2 className="inline mr-2" size={18} /> Remove Order
-            </button>
-          )}
-        </div>
+        
         <Formik
           initialValues={initialValues}
           validationSchema={Add_Order_Validator}
@@ -349,26 +339,28 @@ const removeCustomerMutation = useMutation({
                 </div>
               </div>
               <div className="flex justify-end gap-3 mt-6">
-                <button
-                  type="submit"
-                  className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 ${
-                    updateUserMutation.isPending 
-                      ? "bg-gray-400 cursor-not-allowed" 
-                      : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
-                  }`}
-                  disabled={updateUserMutation.isPending}
-                >
-                  {updateUserMutation.isPending ? (
-                    <>
-                      <span className="loading loading-dots loading-sm"></span>{" "}
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      Save
-                    </>
-                  )}
-                </button>
+                {UserRole !== "Viewer" && (
+                  <button
+                    type="submit"
+                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 ${
+                      updateUserMutation.isPending 
+                        ? "bg-gray-400 cursor-not-allowed" 
+                        : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
+                    }`}
+                    disabled={updateUserMutation.isPending}
+                  >
+                    {updateUserMutation.isPending ? (
+                      <>
+                        <span className="loading loading-dots loading-sm"></span>{" "}
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        Save
+                      </>
+                    )}
+                  </button>
+                )}
                 <Link
                   className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold text-sm transition-all duration-300 shadow-sm hover:shadow-md"
                   href="/dashboard/order_management"

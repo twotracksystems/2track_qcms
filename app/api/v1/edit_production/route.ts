@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { createClient, requireNotViewer } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
 /** ISO time (HH:mm or HH:mm:ss) to tbl_prod time text e.g. "6:50:00 AM" */
@@ -50,6 +50,13 @@ export async function PUT(req: NextRequest) {
     const exit_date_time = body.exit_date_time as string | null | undefined;
 
     const supabase = await createClient();
+    const viewerCheck = await requireNotViewer(supabase);
+    if (!viewerCheck.allowed) {
+      return NextResponse.json(
+        { error: "Viewers cannot modify data." },
+        { status: 403 }
+      );
+    }
 
     const prod_start_date = toProdStartDate(entry_date_time);
     const prod_start_time = toProdTime(entry_date_time);

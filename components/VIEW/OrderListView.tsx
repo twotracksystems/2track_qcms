@@ -2,7 +2,7 @@
 import { createClient } from "@/utils/supabase/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Formik, Form, FieldArray, Field, ErrorMessage } from "formik";
-import { Calendar, Eye, Pencil, Slice, Trash } from "lucide-react";
+import { ArrowUpDown, Calendar, ChevronDown, ChevronUp, Eye, Pencil, Slice, Trash } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useRef, useState, use } from "react";
@@ -16,6 +16,24 @@ import DownloadOrderListView from "./DownloadOrderListView";
 import { read } from "fs";
 import ImprovedPagination from "../UI/ImprovedPagination";
 import { normalizeDecimalInput } from "@/utils/parseDecimal";
+
+function isMeasurementRowAllZeros(row: {
+  length?: number | string;
+  inside_diameter?: number | string;
+  outside_diameter?: number | string;
+  flat_crush?: number | string;
+  h20?: number | string;
+}): boolean {
+  const n = (v: number | string | undefined) =>
+    v === "" || v == null ? 0 : Number(v);
+  return (
+    n(row.length) === 0 &&
+    n(row.inside_diameter) === 0 &&
+    n(row.outside_diameter) === 0 &&
+    n(row.flat_crush) === 0 &&
+    n(row.h20) === 0
+  );
+}
 
 export default function OrderListView() {
   const [page, setPage] = useState(1);
@@ -32,6 +50,8 @@ export default function OrderListView() {
   const [startDateInput, setStartDateInput] = useState("");
   const [endDateInput, setEndDateInput] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<"ofid" | "entry_date">("ofid");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const startDatePickerRef = useRef<HTMLInputElement>(null);
   const endDatePickerRef = useRef<HTMLInputElement>(null);
   const {
@@ -51,6 +71,8 @@ export default function OrderListView() {
       limit,
       startDate,
       endDate,
+      sortBy,
+      sortDir,
     ],
     queryFn: async () => {
       const hasStructuredSearch =
@@ -68,6 +90,8 @@ export default function OrderListView() {
         }
         if (startDate) params.set("startDate", startDate);
         if (endDate) params.set("endDate", endDate);
+        params.set("sortBy", sortBy);
+        params.set("order", sortDir);
 
         const response = await fetch(`/api/v1/get_order?${params.toString()}`, {
           method: "GET",
@@ -87,7 +111,7 @@ export default function OrderListView() {
         const response = await fetch(
           `/api/v1/get_order?page=${page}&search=${encodeURIComponent(
             search
-          )}&limit=${limit}&startDate=${startDate}&endDate=${endDate}`,
+          )}&limit=${limit}&startDate=${startDate}&endDate=${endDate}&sortBy=${sortBy}&order=${sortDir}`,
           {
             method: "GET",
             headers: {
@@ -107,7 +131,7 @@ export default function OrderListView() {
         const response = await fetch(
           `/api/v1/get_order?page=${page}&search=${encodeURIComponent(
             search
-          )}&limit=${limit}`,
+          )}&limit=${limit}&sortBy=${sortBy}&order=${sortDir}`,
           {
             method: "GET",
             headers: {
@@ -163,7 +187,6 @@ export default function OrderListView() {
   const [userID, setUserID] = useState<string | null>(null);
   const [orderid, setOrderid] = useState<string | null>(null);
   const [orderformdisplay, setOrderformdisplay] = useState<string | null>(null);
-  const [asssing_id, setAssign_id] = useState<string | null>(null);
   const [editableRowProd, setEditableRowProd] = useState<number | null>(null);
   const [editableRowProof, setEditableRowProof] = useState<number | null>(null);
   const [editableRowMes, setEditableRowMes] = useState<number | null>(null);
@@ -224,18 +247,19 @@ export default function OrderListView() {
   const [designationsByOfid, setDesignationsByOfid] = useState<Record<string, string>>({});
   const [isLoadingDesignations, setIsLoadingDesignations] = useState(false);
 
-  // Current page rows: numeric-leading OFIDs first, then by OFID descending
+  // Use server-sorted order (sortBy/sortDir are sent to API)
   const sortedOrders = useMemo(() => {
-    const rows = Array.isArray(ordersData?.data) ? ordersData.data : [];
-    return [...rows].sort((a: any, b: any) => {
-      const aVal = String(a.order_fabrication_control ?? "");
-      const bVal = String(b.order_fabrication_control ?? "");
-      const aNum = /^[0-9]/.test(aVal);
-      const bNum = /^[0-9]/.test(bVal);
-      if (aNum !== bNum) return aNum ? -1 : 1;
-      return bVal.localeCompare(aVal, undefined, { numeric: true });
-    });
+    return Array.isArray(ordersData?.data) ? ordersData.data : [];
   }, [ordersData?.data]);
+
+  const handleSort = (column: "ofid" | "entry_date") => {
+    if (sortBy === column) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(column);
+      setSortDir(column === "entry_date" ? "desc" : "desc");
+    }
+  };
 
   // Function to toggle "select all" rows
   const toggleSelectAll = () => {
@@ -451,7 +475,6 @@ export default function OrderListView() {
     }) || [];
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isAssignModalOpen, setAssignModal] = useState(false);
   const [initialValues, setInitialValues] = useState({
     rows: [
       {
@@ -479,7 +502,7 @@ export default function OrderListView() {
         rowsmeasurement: [
       {
         measurement_id: "",
-        pallete_count: lastpalleteCount,
+        pallete_count: "" as number | "",
         number_of_control: 0,
         length: "",
         inside_diameter: "",
@@ -508,13 +531,6 @@ export default function OrderListView() {
         isControlRow: false,
       },
     ],
-  });
-
-  const initialValuesAssign = {
-    user_id: "",
-  };
-  const validationSchemaAssign = Yup.object({
-    user_id: Yup.string().required("User is required"),
   });
 
   const validationSchema = Yup.object({
@@ -750,10 +766,8 @@ export default function OrderListView() {
       toast.error(error?.message ?? "Failed to add Measurement");
       console.error(error);
     },
-    onSuccess: (data) => {
-      toast.success("Measurement Added Successfully");
-      navigator.push("/dashboard/order_management");
-      refetchMeasurentData();
+    onSuccess: () => {
+      // Toast, redirect, and refetch are handled in the form after all rows are saved.
     },
     onMutate: (data) => {
       return data;
@@ -842,7 +856,7 @@ export default function OrderListView() {
         rowsmeasurement: prev.rowsmeasurement.map((row) => ({
           ...row,
           number_of_control: numberControl,
-          pallete_count: lastpalleteCount,
+          pallete_count: "" as number | "",
           iswhiteAll: false,
         })),
       }));
@@ -990,87 +1004,7 @@ export default function OrderListView() {
       // You can do additional logic here, e.g., close the modal or refresh data
     },
   });
-  //assigning
   const [error, setError] = useState<string | null>(null);
-
-  const {
-    data: customerData,
-    isFetching: isFetchingCustomers,
-    isError: isErrorCustomers,
-    refetch: refetchAssignData,
-  } = useQuery({
-    queryKey: ["get_users", page, search, limit],
-    queryFn: async () => {
-      const response = await fetch(
-        `/api/v1/get_users?page=${page}&search=${search}&limit=${limit}`,
-        {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch customers");
-      }
-
-      return response.json();
-    },
-    staleTime: 5000,
-    retry: 2,
-    // Handle error inside the query function
-  });
-
-  const customerOptions =
-    customerData?.data.map((customer: any) => ({
-      value: customer.uuid,
-      label: `${customer.first_name} ${customer.last_name}`,
-    })) || [];
-
-  const AssignOrderMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await fetch("/api/v1/create_assign", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-      const responseData = await response.json();
-
-      // Return status and response data
-      return {
-        status: response.status,
-        data: responseData,
-      };
-    },
-    onError: (error) => {
-      toast.error("Failed to add assignee");
-    },
-    onSuccess: ({ status, data }) => {
-      if (status === 200) {
-        // Handle success for user creation
-        toast.success("Assign added successfully");
-        refetchAssignData();
-        // Delay navigation by 2 seconds (2000 milliseconds)
-        setTimeout(() => {
-          navigator.push("/dashboard/order_management");
-        }, 2000);
-      } else if (status === 409) {
-        // Handle conflict (e.g., user already exists)
-        toast.error(
-          "The email is already registered. Please use a different email and try again."
-        );
-      } else {
-        // Handle other non-success statuses
-        toast.error("An unexpected error occur  red. Please try again.");
-      }
-    },
-    onMutate: (data) => {
-      return data;
-    },
-  });
 
   const formatIsoToDisplay = (iso?: string) => {
     if (!iso) return "";
@@ -1270,13 +1204,15 @@ export default function OrderListView() {
             </div>
           </div>
 
-          {/* Add Order Button */}
-          <Link
-            href="/dashboard/addorder"
-            className="px-3 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs transition-all duration-300 shadow-md hover:shadow-lg shrink-0 whitespace-nowrap transform hover:scale-105 active:scale-95 border border-blue-500/20"
-          >
-            Add Order
-          </Link>
+          {/* Add Order Button - hidden for Viewers */}
+          {userRole !== "Viewer" && (
+            <Link
+              href="/dashboard/addorder"
+              className="px-3 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs transition-all duration-300 shadow-md hover:shadow-lg shrink-0 whitespace-nowrap transform hover:scale-105 active:scale-95 border border-blue-500/20"
+            >
+              Add Order
+            </Link>
+          )}
 
           {/* Refresh Button */}
           {/* <button
@@ -1322,11 +1258,33 @@ export default function OrderListView() {
                       onChange={toggleSelectAll}
                     />
                   </th>
-                  <th className="px-2 py-2.5 font-bold text-xs uppercase tracking-wide whitespace-nowrap">OF ID</th>
+                  <th className="px-2 py-2.5 font-bold text-xs uppercase tracking-wide whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("ofid")}
+                      title="Click to sort by OF ID"
+                      aria-label="Sort by OF ID"
+                      className="inline-flex items-center gap-1 cursor-pointer hover:bg-white/10 hover:underline focus:outline-none focus:ring-2 focus:ring-white/50 rounded px-1 -mx-1 transition-colors"
+                    >
+                      OF ID
+                      {sortBy === "ofid" ? (sortDir === "asc" ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />) : <ArrowUpDown className="h-3.5 w-3.5 opacity-80" />}
+                    </button>
+                  </th>
                   <th className="px-2 py-2.5 font-bold text-xs uppercase tracking-wide whitespace-nowrap">Company</th>
                   <th className="px-2 py-2.5 font-bold text-xs uppercase tracking-wide">Designation</th>
                   <th className="px-2 py-2.5 font-bold text-xs uppercase tracking-wide whitespace-nowrap w-16">Pallete</th>
-                  <th className="px-2 py-2.5 font-bold text-xs uppercase tracking-wide whitespace-nowrap" title="From production start (prod_start_date + prod_start_time)">Entry Date</th>
+                  <th className="px-2 py-2.5 font-bold text-xs uppercase tracking-wide whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => handleSort("entry_date")}
+                      title="Click to sort by Entry Date"
+                      aria-label="Sort by Entry Date"
+                      className="inline-flex items-center gap-1 cursor-pointer hover:bg-white/10 hover:underline focus:outline-none focus:ring-2 focus:ring-white/50 rounded px-1 -mx-1 transition-colors"
+                    >
+                      Entry Date
+                      {sortBy === "entry_date" ? (sortDir === "asc" ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />) : <ArrowUpDown className="h-3.5 w-3.5 opacity-80" />}
+                    </button>
+                  </th>
                   <th className="px-2 py-2.5 font-bold text-xs uppercase tracking-wide whitespace-nowrap" title="From production end (prod_end_date + prod_end_time)">Exit Date</th>
                   <th className="px-2 py-2.5 font-bold text-xs uppercase tracking-wide whitespace-nowrap w-24">OPTIONS</th>
                 </tr>
@@ -1367,7 +1325,7 @@ export default function OrderListView() {
                           setOrderid(order.id);
                           setCurrentOrder(order);
                           setOrderformdisplay(order.order_fabrication_control);
-                          setNumberControl(3);
+                          setNumberControl(Number(order.pallete_count) || 1);
                           setFilterPalleteCount(order.pallete_count);
                           // Prefill Production tab from tbl_prod (entry/exit from list row)
                           setInitialValues((prev) => ({
@@ -1434,51 +1392,44 @@ export default function OrderListView() {
                       </td>
                       <td className="px-2 py-2.5">
                         <div className="flex justify-center items-center gap-2">
-                          {userRole === "Super Admin" && (
-                            <button
-                              className="px-2 py-1 rounded-md bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold text-[10px] transition-all duration-300 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95"
-                              onClick={() => {
-                                setAssignModal(true);
-                                setOrderid(order.id);
-                              }}
-                            >
-                              Assign
-                            </button>
+                          {userRole !== "Viewer" && (
+                            <>
+                              <Link
+                                href={`/dashboard/editorder/${order.id}`}
+                                className="flex items-center gap-1 px-2 py-1 rounded-md bg-gradient-to-r from-blue-400 to-blue-500 hover:from-blue-500 hover:to-blue-600 text-white font-semibold text-[10px] transition-all duration-300 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95"
+                              >
+                                <Pencil className="h-3 w-3" /> Edit
+                              </Link>
+                              <button
+                                type="button"
+                                className={`flex items-center gap-1 px-2 py-1 rounded-md font-semibold text-[10px] transition-all duration-300 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95 ${
+                                  deleteOrderMutation.isPending &&
+                                  deletingId === String(order.id)
+                                    ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                                    : "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white"
+                                }`}
+                                disabled={
+                                  deleteOrderMutation.isPending &&
+                                  deletingId === String(order.id)
+                                }
+                                onClick={() => {
+                                  const confirmed = window.confirm(
+                                    "Delete this order? This action cannot be undone."
+                                  );
+                                  if (!confirmed) return;
+                                  const id = String(order.id);
+                                  setDeletingId(id);
+                                  deleteOrderMutation.mutate(id);
+                                }}
+                              >
+                                <Trash className="h-3 w-3" />
+                                {deleteOrderMutation.isPending &&
+                                deletingId === String(order.id)
+                                  ? "Deleting..."
+                                  : "Delete"}
+                              </button>
+                            </>
                           )}
-                          <Link
-                            href={`/dashboard/editorder/${order.id}`}
-                            className="flex items-center gap-1 px-2 py-1 rounded-md bg-gradient-to-r from-blue-400 to-blue-500 hover:from-blue-500 hover:to-blue-600 text-white font-semibold text-[10px] transition-all duration-300 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95"
-                          >
-                            <Pencil className="h-3 w-3" /> Edit
-                          </Link>
-                          <button
-                            type="button"
-                            className={`flex items-center gap-1 px-2 py-1 rounded-md font-semibold text-[10px] transition-all duration-300 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95 ${
-                              deleteOrderMutation.isPending &&
-                              deletingId === String(order.id)
-                                ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                                : "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white"
-                            }`}
-                            disabled={
-                              deleteOrderMutation.isPending &&
-                              deletingId === String(order.id)
-                            }
-                            onClick={() => {
-                              const confirmed = window.confirm(
-                                "Delete this order? This action cannot be undone."
-                              );
-                              if (!confirmed) return;
-                              const id = String(order.id);
-                              setDeletingId(id);
-                              deleteOrderMutation.mutate(id);
-                            }}
-                          >
-                            <Trash className="h-3 w-3" />
-                            {deleteOrderMutation.isPending &&
-                            deletingId === String(order.id)
-                              ? "Deleting..."
-                              : "Delete"}
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -1886,22 +1837,24 @@ export default function OrderListView() {
                                                           </>
                                                         ) : (
                                                           <>
-                                                            <button
-                                                              type="button"
-                                                              className={`px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-xs transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 ${
-                                                                editableRowProd !==
-                                                                null
-                                                                  ? "hidden"
-                                                                  : ""
-                                                              }`}
-                                                              onClick={() =>
-                                                                setEditableRowProd(
-                                                                  index
-                                                                )
-                                                              }
-                                                            >
-                                                              Edit
-                                                            </button>
+                                                            {userRole !== "Viewer" && (
+                                                              <button
+                                                                type="button"
+                                                                className={`px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-xs transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 ${
+                                                                  editableRowProd !==
+                                                                  null
+                                                                    ? "hidden"
+                                                                    : ""
+                                                                }`}
+                                                                onClick={() =>
+                                                                  setEditableRowProd(
+                                                                    index
+                                                                  )
+                                                                }
+                                                              >
+                                                                Edit
+                                                              </button>
+                                                            )}
                                                             {/* <button
                                                               type="button"
                                                               className={`btn btn-error ${
@@ -2011,13 +1964,15 @@ export default function OrderListView() {
                       <Form>
                         <div className="">
                           <div className="flex justify-end gap-3 mb-4">
-                            <button
-                              className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
-                              type="submit"
-                              disabled={updateDryingMutation.isPending}
-                            >
-                              {updateDryingMutation.isPending ? "Saving..." : "Save Drying"}
-                            </button>
+                            {userRole !== "Viewer" && (
+                              <button
+                                className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
+                                type="submit"
+                                disabled={updateDryingMutation.isPending}
+                              >
+                                {updateDryingMutation.isPending ? "Saving..." : "Save Drying"}
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold text-sm transition-all duration-300 shadow-sm hover:shadow-md"
@@ -2102,10 +2057,10 @@ export default function OrderListView() {
                         );
                         return;
                       }
-                      // if (userConfirmed) {
-                      //   (async () => {
+                      let savedCount = 0;
                       for (const row of values.rowsmeasurement) {
                         if (row.iswhiteAll) continue; // Skip placeholder rows
+                        if (isMeasurementRowAllZeros(row)) continue; // Skip rows with all zero measurement values
                         const measurementData = {
                           order_id: orderid,
                           ofid: orderformdisplay ?? undefined,
@@ -2116,7 +2071,7 @@ export default function OrderListView() {
                           h20: row.h20,
                           number_control: row.number_of_control,
                           remarks: row.remarks,
-                          pallete_count: row.pallete_count ?? 0,
+                          pallete_count: Number(row.pallete_count) || 0,
                           user_id: userID,
                         };
 
@@ -2125,7 +2080,16 @@ export default function OrderListView() {
                         await AddMeasurementMutation.mutateAsync(
                           measurementData
                         );
+                        savedCount += 1;
                       }
+                      // Single popup and navigation after all rows are saved
+                      toast.success(
+                        savedCount === 1
+                          ? "Measurement Added Successfully"
+                          : `${savedCount} measurements added successfully`
+                      );
+                      refetchMeasurentData();
+                      navigator.push("/dashboard/order_management");
                     }}
                   >
                     {({ values, setFieldValue }) => (
@@ -2136,53 +2100,57 @@ export default function OrderListView() {
                             render={(arrayHelpers) => (
                               <div>
                                 <div className="flex flex-wrap items-center justify-end gap-3 mb-4">
-                                  <button
-                                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-700 hover:to-cyan-800 text-white font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
-                                    type="button"
-                                    onClick={() => {
-                                      const numberToAdd = 3;
+                                  {userRole !== "Viewer" && (
+                                    <>
+                                      <button
+                                        className="px-4 py-2 rounded-lg bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-700 hover:to-cyan-800 text-white font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
+                                        type="button"
+                                        onClick={() => {
+                                          const numberToAdd = 3;
 
-                                      // Check if there's any unsaved/new pallete
-                                      const hasNewPallete =
-                                        values.rowsmeasurement.some(
-                                          (row) => row.isnew
-                                        );
-                                      if (hasNewPallete) {
-                                        alert(
-                                          "Please save the current pallete(s) before adding more."
-                                        );
-                                        return;
-                                      }
+                                          // Check if there's any unsaved/new pallete
+                                          const hasNewPallete =
+                                            values.rowsmeasurement.some(
+                                              (row) => row.isnew
+                                            );
+                                          if (hasNewPallete) {
+                                            alert(
+                                              "Please save the current pallete(s) before adding more."
+                                            );
+                                            return;
+                                          }
 
-                                      for (let i = 1; i <= numberToAdd; i++) {
-                                        const newIndex = values.rowsmeasurement.length + i - 1;
-                                        arrayHelpers.push({
-                                          pallete_count: 0,
-                                          number_of_control: 0,
-                                          length: "0",
-                                          inside_diameter: "0",
-                                          outside_diameter: "0",
-                                          flat_crush: "0",
-                                          h20: "0",
-                                          remarks: "",
-                                          isnew: true,
-                                          iswhiteAll: false,
-                                          isReadonly: false,
-                                          isReadOnlyFlat: false, // Allow editing Flat Crush and H2O on all rows
-                                        });
-                                      }
-                                      setcurrentpalleteCount((prev) => prev + numberToAdd);
-                                    }}
-                                  >
-                                    Add Pallete
-                                  </button>
+                                          for (let i = 1; i <= numberToAdd; i++) {
+                                            const newIndex = values.rowsmeasurement.length + i - 1;
+                                            arrayHelpers.push({
+                                              pallete_count: "" as number | "",
+                                              number_of_control: 0,
+                                              length: "",
+                                              inside_diameter: "",
+                                              outside_diameter: "",
+                                              flat_crush: "",
+                                              h20: "",
+                                              remarks: "",
+                                              isnew: true,
+                                              iswhiteAll: false,
+                                              isReadonly: false,
+                                              isReadOnlyFlat: false, // Allow editing Flat Crush and H2O on all rows
+                                            });
+                                          }
+                                          setcurrentpalleteCount((prev) => prev + numberToAdd);
+                                        }}
+                                      >
+                                        Add Pallete
+                                      </button>
 
-                                  <button
-                                    className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
-                                    type="submit"
-                                  >
-                                    Save Measurement
-                                  </button>
+                                      <button
+                                        className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-sm transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
+                                        type="submit"
+                                      >
+                                        Save Measurement
+                                      </button>
+                                    </>
+                                  )}
                                   <button
                                     className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold text-sm transition-all duration-300 shadow-sm hover:shadow-md"
                                     onClick={() => {
@@ -2538,7 +2506,7 @@ export default function OrderListView() {
                                           {measurementError?.message || "Something went wrong while fetching measurement data."}
                                         </td>
                                       </tr>
-                                    ) : fetchedMeasurementData && fetchedMeasurementData.length === 0 ? (
+                                    ) : fetchedMeasurementData && fetchedMeasurementData.length === 0 && !values.rowsmeasurement.some((row) => !row.iswhiteAll) ? (
                                       <tbody>
                                         <tr>
                                           <td colSpan={8} className="text-center text-sm text-slate-600">
@@ -2784,7 +2752,7 @@ value={row.number_of_control}
                                                       </>
                                                     ) : (
                                                       <>
-                                                        {!editableRowMes && (
+                                                        {!editableRowMes && userRole !== "Viewer" && (
                                                           <>
                                                             <button
                                                               type="button"
@@ -2852,55 +2820,6 @@ value={row.number_of_control}
                       </Form>
                     )}
                   </Formik>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        {isAssignModalOpen && (
-          <div className="modal modal-open">
-            <div className="modal-box w-11/12 max-w-1xl">
-              <div className="flex flex-col gap-y-4">
-                <div className="flex flex-col gap-y-4">
-                  <label className="label">Assign Order</label>
-                  <select
-                    className="select select-bordered"
-                    onChange={(e) => {
-                      setAssign_id(e.target.value);
-                    }}
-                  >
-                    <option value="" disabled selected>
-                      Select Customer
-                    </option>
-                    {customerOptions.map((option: any) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex gap-4 place-content-end">
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => {
-                      AssignOrderMutation.mutate({
-                        order_form_id: orderid,
-                        user_id: asssing_id,
-                      });
-                    }}
-                  >
-                    Assign
-                  </button>
-                  <button
-                    className="btn btn-accent"
-                    onClick={() => {
-                      setAssignModal(false);
-                      setOrderid(null);
-                      window.location.reload();
-                    }}
-                  >
-                    Cancel
-                  </button>
                 </div>
               </div>
             </div>

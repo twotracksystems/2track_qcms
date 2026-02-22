@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { createClient, requireNotViewer } from "@/utils/supabase/server";
 import { normalizeDecimalInput } from "@/utils/parseDecimal";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -27,8 +27,14 @@ export async function POST(req: NextRequest) {
     user_id
     );
 
-    // Create Supabase client
     const supabase = await createClient();
+    const viewerCheck = await requireNotViewer(supabase);
+    if (!viewerCheck.allowed) {
+      return NextResponse.json(
+        { error: "Viewers cannot modify data." },
+        { status: 403 }
+      );
+    }
 
     const numberControlValue = normalizeDecimalInput(number_control);
 

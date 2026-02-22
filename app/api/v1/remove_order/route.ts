@@ -1,5 +1,39 @@
-import { createClient } from "@/utils/supabase/server";
+import { createClient, requireNotViewer } from "@/utils/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+
+const MEASUREMENT_DELETE_BATCH_SIZE = 500;
+
+/** Delete all tbl_measurement_prod rows for an ofid in batches by id to avoid timeouts and full scans. */
+async function deleteMeasurementsByOfidInBatches(
+  supabase: SupabaseClient,
+  ofid: string
+): Promise<{ error: Error | null }> {
+  while (true) {
+    const { data: batch, error: selectError } = await supabase
+      .from("tbl_measurement_prod")
+      .select("id")
+      .eq("ofid", ofid)
+      .limit(MEASUREMENT_DELETE_BATCH_SIZE);
+
+    if (selectError) {
+      return { error: new Error(selectError.message) };
+    }
+    if (!batch?.length) {
+      return { error: null };
+    }
+
+    const ids = batch.map((row) => row.id);
+    const { error: deleteError } = await supabase
+      .from("tbl_measurement_prod")
+      .delete()
+      .in("id", ids);
+
+    if (deleteError) {
+      return { error: new Error(deleteError.message) };
+    }
+  }
+}
 
 export async function DELETE(req: NextRequest) {
   try {
@@ -12,6 +46,13 @@ export async function DELETE(req: NextRequest) {
     }
 
     const supabase = await createClient();
+    const viewerCheck = await requireNotViewer(supabase);
+    if (!viewerCheck.allowed) {
+      return NextResponse.json(
+        { error: "Viewers cannot modify data." },
+        { status: 403 }
+      );
+    }
 
     // Get ofid before deleting so we can cascade-delete measurements
     const { data: prodRow, error: fetchError } = await supabase
@@ -21,10 +62,10 @@ export async function DELETE(req: NextRequest) {
       .maybeSingle();
 
     if (!fetchError && prodRow?.ofid) {
-      const { error: measDeleteError } = await supabase
-        .from("tbl_measurement_prod")
-        .delete()
-        .eq("ofid", prodRow.ofid);
+      const { error: measDeleteError } = await deleteMeasurementsByOfidInBatches(
+        supabase,
+        prodRow.ofid
+      );
       if (measDeleteError) {
         console.error("Supabase Delete Error (tbl_measurement_prod):", measDeleteError);
         return NextResponse.json(
@@ -84,10 +125,10 @@ export async function PUT(req: NextRequest) {
         .maybeSingle();
 
       if (!fetchError && prodRow?.ofid) {
-        const { error: measDeleteError } = await supabase
-          .from("tbl_measurement_prod")
-          .delete()
-          .eq("ofid", prodRow.ofid);
+        const { error: measDeleteError } = await deleteMeasurementsByOfidInBatches(
+          supabase,
+          prodRow.ofid
+        );
         if (measDeleteError) {
           console.error("Supabase Delete Error (tbl_measurement_prod):", measDeleteError);
           return NextResponse.json(

@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { createClient, requireNotViewer } from "@/utils/supabase/server";
 import { normalizeDecimalInput } from "@/utils/parseDecimal";
 import { createClient as createAdminClient } from "@/utils/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
@@ -47,8 +47,14 @@ export async function POST(req: NextRequest) {
       length_max,
     });
 
-    // Create Supabase client
     const supabase = await createClient();
+    const viewerCheck = await requireNotViewer(supabase);
+    if (!viewerCheck.allowed) {
+      return NextResponse.json(
+        { error: "Viewers cannot modify data." },
+        { status: 403 }
+      );
+    }
     const adminSupabase = await createAdminClient();
 
     let nextId = Date.now();

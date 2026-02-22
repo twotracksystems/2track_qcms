@@ -1,27 +1,19 @@
-import { createClient, roleExtractor } from "@/utils/supabase/server";
+import { createClient, requireNotViewer } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function PUT(req: NextRequest) {
   try {
-    // Extract UUID from the request query
     const id = req.nextUrl.searchParams.get("id");
-   
+    const { is_exist } = await req.json();
 
-    // Parse request body
-    const { is_exist } =
-      await req.json();
-
-    // Initialize Supabase client
     const supabase = await createClient();
-
-    // Verify user role
-    // const current_role = await roleExtractor(supabase);
-    // if (current_role !== "Super Admin") {
-    //   return NextResponse.json(
-    //     { error: "No permission to perform this action" },
-    //     { status: 401 }
-    //   );
-    // }
+    const viewerCheck = await requireNotViewer(supabase);
+    if (!viewerCheck.allowed) {
+      return NextResponse.json(
+        { error: "Viewers cannot modify data." },
+        { status: 403 }
+      );
+    }
 
     // Update user details in the database
     const { data: userUpdateData, error: userUpdateError } = await supabase

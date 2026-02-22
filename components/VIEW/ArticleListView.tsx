@@ -3,8 +3,9 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Pencil, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { createClient } from "@/utils/supabase/client";
 import ImprovedPagination from "../UI/ImprovedPagination";
 import SuggestiveSearchInput from "../UI/SuggestiveSearchInput";
 import ViewArticleList from "./ViewArticleList";
@@ -17,6 +18,16 @@ export default function UserListView() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showWarningModal, setShowWarningModal] = useState(false);
+  const [articleIdToDelete, setArticleIdToDelete] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setUserRole(data.user?.user_metadata?.role ?? null);
+    });
+  }, []);
 
   const { data, refetch, isFetching, isLoading, isError } = useQuery({
     queryKey: ["get_article_prod", page, search, limit],
@@ -116,13 +127,15 @@ export default function UserListView() {
             Refresh
           </button>
 
-          {/* Add Article Button */}
-          <Link
-            href="/dashboard/addarticle"
-            className="px-3 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs transition-all duration-300 shadow-md hover:shadow-lg shrink-0 whitespace-nowrap transform hover:scale-105 active:scale-95 border border-blue-500/20"
-          >
-            Add Article
-          </Link>
+          {/* Add Article Button - hidden for Viewers */}
+          {userRole !== "Viewer" && (
+            <Link
+              href="/dashboard/addarticle"
+              className="px-3 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold text-xs transition-all duration-300 shadow-md hover:shadow-lg shrink-0 whitespace-nowrap transform hover:scale-105 active:scale-95 border border-blue-500/20"
+            >
+              Add Article
+            </Link>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg border border-blue-200/30 overflow-hidden">
@@ -173,40 +186,57 @@ export default function UserListView() {
                       <td className="px-2 py-2.5 text-xs text-gray-700 whitespace-nowrap">{formatDate(get_users.created_at)}</td>
                       <td className="px-2 py-2.5">
                         <div className="flex justify-center items-center gap-2">
-                          <Link
-                            href={`/dashboard/edit_article/${get_users.id}`}
-                            className="flex items-center gap-1 px-2 py-1 rounded-md bg-gradient-to-r from-blue-400 to-blue-500 hover:from-blue-500 hover:to-blue-600 text-white font-semibold text-[10px] transition-all duration-300 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95"
-                          >
-                            <Pencil className="h-3 w-3" /> Edit
-                          </Link>
-                          <button
-                            type="button"
-                            className={`flex items-center gap-1 px-2 py-1 rounded-md font-semibold text-[10px] transition-all duration-300 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95 ${
-                              deleteArticleMutation.isPending &&
-                              deletingId === String(get_users.id)
-                                ? "bg-gray-300 text-gray-600 cursor-not-allowed"
-                                : "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white"
-                            }`}
-                            disabled={
-                              deleteArticleMutation.isPending &&
-                              deletingId === String(get_users.id)
-                            }
-                            onClick={() => {
-                              const confirmed = window.confirm(
-                                "Delete this article? This action cannot be undone."
-                              );
-                              if (!confirmed) return;
-                              const id = String(get_users.id);
-                              setDeletingId(id);
-                              deleteArticleMutation.mutate(id);
-                            }}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                            {deleteArticleMutation.isPending &&
-                            deletingId === String(get_users.id)
-                              ? "Deleting..."
-                              : "Delete"}
-                          </button>
+                          {userRole !== "Viewer" && (
+                            <>
+                              <Link
+                                href={`/dashboard/edit_article/${get_users.id}`}
+                                className="flex items-center gap-1 px-2 py-1 rounded-md bg-gradient-to-r from-blue-400 to-blue-500 hover:from-blue-500 hover:to-blue-600 text-white font-semibold text-[10px] transition-all duration-300 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95"
+                              >
+                                <Pencil className="h-3 w-3" /> Edit
+                              </Link>
+                              <button
+                                type="button"
+                                className={`flex items-center gap-1 px-2 py-1 rounded-md font-semibold text-[10px] transition-all duration-300 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95 ${
+                                  deleteArticleMutation.isPending &&
+                                  deletingId === String(get_users.id)
+                                    ? "bg-gray-300 text-gray-600 cursor-not-allowed"
+                                    : "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white"
+                                }`}
+                                disabled={
+                                  deleteArticleMutation.isPending &&
+                                  deletingId === String(get_users.id)
+                                }
+                                onClick={async () => {
+                                  const confirmed = window.confirm(
+                                    "Delete this article? This action cannot be undone."
+                                  );
+                                  if (!confirmed) return;
+                                  const id = String(get_users.id);
+                                  try {
+                                    const res = await fetch(
+                                      `/api/v1/check_article_prod_usage?id=${encodeURIComponent(id)}`
+                                    );
+                                    const json = await res.json();
+                                    if (json.inUse) {
+                                      setArticleIdToDelete(id);
+                                      setShowWarningModal(true);
+                                      return;
+                                    }
+                                  } catch {
+                                    // On check error, still allow delete attempt
+                                  }
+                                  setDeletingId(id);
+                                  deleteArticleMutation.mutate(id);
+                                }}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                                {deleteArticleMutation.isPending &&
+                                deletingId === String(get_users.id)
+                                  ? "Deleting..."
+                                  : "Delete"}
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -269,6 +299,43 @@ export default function UserListView() {
                     setSelectedArticleId(null);
                   }}
                 />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showWarningModal && articleIdToDelete && (
+          <div className="modal modal-open">
+            <div className="modal-box">
+              <p className="py-2">
+                This article is used in production. Continue with deletion?
+              </p>
+              <div className="modal-action">
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    setShowWarningModal(false);
+                    setArticleIdToDelete(null);
+                  }}
+                >
+                  No
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    const id = articleIdToDelete;
+                    setShowWarningModal(false);
+                    setArticleIdToDelete(null);
+                    if (id) {
+                      setDeletingId(id);
+                      deleteArticleMutation.mutate(id);
+                    }
+                  }}
+                >
+                  Yes
+                </button>
               </div>
             </div>
           </div>

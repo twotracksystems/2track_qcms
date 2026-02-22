@@ -1,4 +1,4 @@
-import { createClient, roleExtractor } from "@/utils/supabase/server";
+import { createClient, requireNotViewer } from "@/utils/supabase/server";
 import { normalizeDecimalInput } from "@/utils/parseDecimal";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -18,17 +18,14 @@ export async function PUT(req: NextRequest) {
     } =
       await req.json();
 
-    // Initialize Supabase client
     const supabase = await createClient();
-
-    // Verify user role
-    // const current_role = await roleExtractor(supabase);
-    // if (current_role !== "Super Admin") {
-    //   return NextResponse.json(
-    //     { error: "No permission to perform this action" },
-    //     { status: 401 }
-    //   );
-    // }
+    const viewerCheck = await requireNotViewer(supabase);
+    if (!viewerCheck.allowed) {
+      return NextResponse.json(
+        { error: "Viewers cannot modify data." },
+        { status: 403 }
+      );
+    }
 
     const lengthValue = normalizeDecimalInput(length);
     const insideDiameterValue = normalizeDecimalInput(inside_diameter);

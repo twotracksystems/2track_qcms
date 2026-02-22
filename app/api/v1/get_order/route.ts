@@ -16,6 +16,9 @@ export async function GET(req: NextRequest) {
   const designationParam = req.nextUrl.searchParams.get("designation")?.trim() || "";
   const startDate = req.nextUrl.searchParams.get("startDate");
   const endDate = req.nextUrl.searchParams.get("endDate");
+  const sortBy = (req.nextUrl.searchParams.get("sortBy") || "ofid").toLowerCase();
+  const order = (req.nextUrl.searchParams.get("order") || "desc").toLowerCase();
+  const ascending = order === "asc";
 
   const supabase = await createClient();
   const adminSupabase = await createAdminClient();
@@ -130,11 +133,21 @@ export async function GET(req: NextRequest) {
 
     if (totalCount === 0) {
       prodData = [];
+    } else if (sortBy === "entry_date") {
+      const { data: structuredData, error: structuredError } =
+        await buildStructBaseQuery()
+          .order("prod_start_date", { ascending, nullsFirst: false })
+          .order("prod_start_time", { ascending, nullsFirst: false })
+          .range(startIndex, endIndex);
+      if (structuredError) {
+        return NextResponse.json({ error: structuredError.message }, { status: 500 });
+      }
+      prodData = structuredData;
     } else if (endIndex < structNumericCount) {
       const { data: structuredData, error: structuredError } =
         await buildStructBaseQuery()
           .or(OFID_STARTS_DIGIT_OR)
-          .order("ofid", { ascending: false, nullsFirst: false })
+          .order("ofid", { ascending, nullsFirst: false })
           .range(startIndex, endIndex);
       if (structuredError) {
         return NextResponse.json({ error: structuredError.message }, { status: 500 });
@@ -145,7 +158,7 @@ export async function GET(req: NextRequest) {
       const letterEnd = endIndex - structNumericCount;
       const { data: structuredData, error: structuredError } =
         await applyLetterOnlyFilter(buildStructBaseQuery())
-          .order("ofid", { ascending: false, nullsFirst: false })
+          .order("ofid", { ascending, nullsFirst: false })
           .range(letterOffset, letterEnd);
       if (structuredError) {
         return NextResponse.json({ error: structuredError.message }, { status: 500 });
@@ -159,10 +172,10 @@ export async function GET(req: NextRequest) {
       const [numericRes, letterRes] = await Promise.all([
         buildStructBaseQuery()
           .or(OFID_STARTS_DIGIT_OR)
-          .order("ofid", { ascending: false, nullsFirst: false })
+          .order("ofid", { ascending, nullsFirst: false })
           .range(numericStart, numericEnd),
         applyLetterOnlyFilter(buildStructBaseQuery())
-          .order("ofid", { ascending: false, nullsFirst: false })
+          .order("ofid", { ascending, nullsFirst: false })
           .range(letterStart, letterEnd),
       ]);
       if (numericRes.error) {
@@ -310,12 +323,22 @@ export async function GET(req: NextRequest) {
 
     if (totalCount === 0) {
       prodData = [];
+    } else if (sortBy === "entry_date") {
+      const { data: initialData, error: prodError } =
+        await buildDefaultBaseQuery()
+          .order("prod_start_date", { ascending, nullsFirst: false })
+          .order("prod_start_time", { ascending, nullsFirst: false })
+          .range(startIndex, endIndex);
+      if (prodError) {
+        return NextResponse.json({ error: prodError.message }, { status: 500 });
+      }
+      prodData = initialData;
     } else if (endIndex < numericCount) {
       // Page fully in numeric zone
       const { data: initialData, error: prodError } =
         await buildDefaultBaseQuery()
           .or(OFID_STARTS_DIGIT_OR)
-          .order("ofid", { ascending: false, nullsFirst: false })
+          .order("ofid", { ascending, nullsFirst: false })
           .range(startIndex, endIndex);
       if (prodError) {
         return NextResponse.json({ error: prodError.message }, { status: 500 });
@@ -327,7 +350,7 @@ export async function GET(req: NextRequest) {
       const letterEnd = endIndex - numericCount;
       const { data: initialData, error: prodError } =
         await applyLetterOnlyFilter(buildDefaultBaseQuery())
-          .order("ofid", { ascending: false, nullsFirst: false })
+          .order("ofid", { ascending, nullsFirst: false })
           .range(letterOffset, letterEnd);
       if (prodError) {
         return NextResponse.json({ error: prodError.message }, { status: 500 });
@@ -342,10 +365,10 @@ export async function GET(req: NextRequest) {
       const [numericRes, letterRes] = await Promise.all([
         buildDefaultBaseQuery()
           .or(OFID_STARTS_DIGIT_OR)
-          .order("ofid", { ascending: false, nullsFirst: false })
+          .order("ofid", { ascending, nullsFirst: false })
           .range(numericStart, numericEnd),
         applyLetterOnlyFilter(buildDefaultBaseQuery())
-          .order("ofid", { ascending: false, nullsFirst: false })
+          .order("ofid", { ascending, nullsFirst: false })
           .range(letterStart, letterEnd),
       ]);
       if (numericRes.error) {

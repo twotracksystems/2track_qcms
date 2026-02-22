@@ -1,5 +1,5 @@
 import { createClient } from "@/utils/supabase/admin";
-import { roleExtractor } from "@/utils/supabase/server";
+import { roleExtractor, requireNotViewer } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -14,6 +14,13 @@ export async function POST(req: NextRequest) {
   } = await req.json();
 
   const supabase = await createClient();
+  const viewerCheck = await requireNotViewer(supabase);
+  if (!viewerCheck.allowed) {
+    return NextResponse.json(
+      { error: "Viewers cannot modify data." },
+      { status: 403 }
+    );
+  }
   const current_role = await roleExtractor(supabase);
 
   if (current_role !== "Super Admin") {

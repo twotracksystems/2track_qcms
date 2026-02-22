@@ -1,25 +1,19 @@
-import { createClient, roleExtractor } from "@/utils/supabase/server";
+import { createClient, requireNotViewer } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
   try {
-    // Parse incoming request data
     const data = await req.json();
     const { order_form_id,user_id } = data;
 
-
-
-    // Create Supabase client
     const supabase = await createClient();
-
-    // Verify user role
-    // const current_role = await roleExtractor(supabase);
-    // if (current_role !== "Super Admin") {
-    //   return NextResponse.json(
-    //     { error: "No permission to perform this action" },
-    //     { status: 401 }
-    //   );
-    // }
+    const viewerCheck = await requireNotViewer(supabase);
+    if (!viewerCheck.allowed) {
+      return NextResponse.json(
+        { error: "Viewers cannot modify data." },
+        { status: 403 }
+      );
+    }
     // Check if the email already exists
     const { data: existingEmail, error: fetchError } = await supabase
       .from("tbl_assignee_history")

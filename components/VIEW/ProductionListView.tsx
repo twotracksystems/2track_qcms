@@ -452,18 +452,20 @@ export default function OrderListView() {
                       </td>
                       <td className="px-2 py-2.5">
                         <div className="flex justify-center items-center gap-2">
-                          <button
-                            className="flex items-center gap-1 px-2 py-1 rounded-md bg-gradient-to-r from-blue-400 to-blue-500 hover:from-blue-500 hover:to-blue-600 text-white font-semibold text-[10px] transition-all duration-300 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95"
-                            onClick={() => {
-                              setIsModalOpen(true);
-                              setOrderid(order.id);
-                              setOrderformdisplay(order.order_fabrication_control);
-                              setNumberControl(3);
-                              setFilterPalleteCount(order.pallete_count);
-                            }}
-                          >
-                            <Pencil className="h-3 w-3" /> Edit
-                          </button>
+                          {userRole !== "Viewer" && (
+                            <button
+                              className="flex items-center gap-1 px-2 py-1 rounded-md bg-gradient-to-r from-blue-400 to-blue-500 hover:from-blue-500 hover:to-blue-600 text-white font-semibold text-[10px] transition-all duration-300 shadow-sm hover:shadow-md transform hover:scale-105 active:scale-95"
+                              onClick={() => {
+                                setIsModalOpen(true);
+                                setOrderid(order.id);
+                                setOrderformdisplay(order.order_fabrication_control);
+                                setNumberControl(3);
+                                setFilterPalleteCount(order.pallete_count);
+                              }}
+                            >
+                              <Pencil className="h-3 w-3" /> Edit
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -864,22 +866,24 @@ export default function OrderListView() {
                                                           </>
                                                         ) : (
                                                           <>
-                                                            <button
-                                                              type="button"
-                                                              className={`btn btn-primary ${
-                                                                editableRowProd !==
-                                                                null
-                                                                  ? "hidden"
-                                                                  : ""
-                                                              }`}
-                                                              onClick={() =>
-                                                                setEditableRowProd(
-                                                                  index
-                                                                )
-                                                              }
-                                                            >
-                                                              Edit
-                                                            </button>
+                                                            {userRole !== "Viewer" && (
+                                                              <button
+                                                                type="button"
+                                                                className={`btn btn-primary ${
+                                                                  editableRowProd !==
+                                                                  null
+                                                                    ? "hidden"
+                                                                    : ""
+                                                                }`}
+                                                                onClick={() =>
+                                                                  setEditableRowProd(
+                                                                    index
+                                                                  )
+                                                                }
+                                                              >
+                                                                Edit
+                                                              </button>
+                                                            )}
                                                             {/* <button
                                                               type="button"
                                                               className={`btn btn-error ${

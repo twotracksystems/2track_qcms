@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { createClient, requireNotViewer } from "@/utils/supabase/server";
 import { normalizeDecimalInput } from "@/utils/parseDecimal";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -24,6 +24,13 @@ export async function PUT(req: NextRequest) {
     } = body;
 
     const supabase = await createClient();
+    const viewerCheck = await requireNotViewer(supabase);
+    if (!viewerCheck.allowed) {
+      return NextResponse.json(
+        { error: "Viewers cannot modify data." },
+        { status: 403 }
+      );
+    }
 
     // Get measurement row from tbl_measurement_prod to get ofid for tbl_prod.note update
     const { data: measurementRow } = await supabase

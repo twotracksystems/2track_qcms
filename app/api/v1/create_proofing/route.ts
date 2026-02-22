@@ -1,4 +1,4 @@
-import { createClient } from "@/utils/supabase/server";
+import { createClient, requireNotViewer } from "@/utils/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { use } from "react";
 
@@ -24,8 +24,14 @@ export async function POST(req: NextRequest) {
       program_name,
     );
 
-    // Create Supabase client
     const supabase = await createClient();
+    const viewerCheck = await requireNotViewer(supabase);
+    if (!viewerCheck.allowed) {
+      return NextResponse.json(
+        { error: "Viewers cannot modify data." },
+        { status: 403 }
+      );
+    }
 
     // Insert data into tbl_orders_form
     const { data: insertResult, error } = await supabase
