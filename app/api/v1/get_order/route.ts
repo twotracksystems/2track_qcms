@@ -144,10 +144,11 @@ export async function GET(req: NextRequest) {
       }
       prodData = structuredData;
     } else if (endIndex < structNumericCount) {
+   
       const { data: structuredData, error: structuredError } =
         await buildStructBaseQuery()
           .or(OFID_STARTS_DIGIT_OR)
-          .order("ofid", { ascending, nullsFirst: false })
+          .order("created_at", {ascending , nullsFirst: false })
           .range(startIndex, endIndex);
       if (structuredError) {
         return NextResponse.json({ error: structuredError.message }, { status: 500 });
