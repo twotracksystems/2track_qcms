@@ -67,13 +67,13 @@ export async function POST(req: NextRequest) {
     const outside = norm(outside_diameter);
     const flat = norm(flat_crush);
     const hum = norm(h20);
-    const allZeros = len === 0 && inside === 0 && outside === 0 && flat === 0 && hum === 0;
-    if (allZeros) {
-      return NextResponse.json(
-        { message: "Row skipped: all measurement values are zero" },
-        { status: 200 }
-      );
-    }
+    // const allZeros = len === 0 && inside === 0 && outside === 0 && flat === 0 && hum === 0;
+    // if (allZeros) {
+    //   return NextResponse.json(
+    //     { message: "Row skipped: all measurement values are zero" },
+    //     { status: 200 }
+    //   );
+    // }
 
     // Insert into tbl_measurement_prod so the measurement modal can display the data (it reads by ofid)
     if (ofidValue) {
